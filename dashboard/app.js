@@ -313,9 +313,18 @@ function sourceMetaHtml(item) {
   return `<span class="meta-source">source: ${escapeHtml(source)}</span>`;
 }
 
+function isNewToday(item) {
+  if (!item.firstSeenAt) return false;
+  const seen = new Date(item.firstSeenAt);
+  const today = new Date();
+  return seen.getFullYear() === today.getFullYear()
+    && seen.getMonth() === today.getMonth()
+    && seen.getDate() === today.getDate();
+}
+
 function stateBadgesHtml(item) {
   const badges = [];
-  if (item.isNew && !item.isRemoved) badges.push('<span class="state-badge new">Nouveau</span>');
+  if (isNewToday(item) && !item.isRemoved) badges.push('<span class="state-badge new">Nouveau</span>');
   if (item.isRemoved) badges.push('<span class="state-badge removed">Retirée</span>');
 
   return badges.length ? `<div class="state-badges">${badges.join('')}</div>` : '';
@@ -497,7 +506,7 @@ function matchesCardFilter(item, key) {
   if (key === 'pearl') return !item.isRemoved && !!item.isPearl;
   if (key === 'transition') return !item.isRemoved && (String(item.priority || '') === 'B' || (item.rooms ?? 0) < 2);
   if (key === 'urgent') return !item.isRemoved && getUrgency(item).level === 'high';
-  if (key === 'new') return !item.isRemoved && !!item.isNew;
+  if (key === 'new') return !item.isRemoved && isNewToday(item);
   if (key === 'removed') return !!item.isRemoved;
   return true;
 }
@@ -714,7 +723,7 @@ function renderDesktop(listings) {
     const tr = document.createElement('tr');
     if (item.isRemoved) tr.classList.add('row-removed');
     if (isRefused(item)) tr.classList.add('row-refused');
-    if (item.isNew && !item.isRemoved) tr.classList.add('row-new');
+    if (isNewToday(item) && !item.isRemoved) tr.classList.add('row-new');
 
     const tdPriority = document.createElement('td');
     tdPriority.innerHTML = `<span class="tag">${item.priority || '-'}</span>`;
@@ -833,7 +842,7 @@ function renderKanban(listings) {
       kCard.className = 'k-card';
       if (item.isRemoved) kCard.classList.add('removed');
       if (isRefused(item)) kCard.classList.add('refused');
-      if (item.isNew && !item.isRemoved) kCard.classList.add('new');
+      if (isNewToday(item) && !item.isRemoved) kCard.classList.add('new');
 
       if (!item.isRemoved) {
         kCard.draggable = true;
@@ -952,7 +961,7 @@ function renderMobile(listings) {
     card.className = 'mobile-card';
     if (item.isRemoved) card.classList.add('removed');
     if (isRefused(item)) card.classList.add('refused');
-    if (item.isNew && !item.isRemoved) card.classList.add('new');
+    if (isNewToday(item) && !item.isRemoved) card.classList.add('new');
 
     const urls = getImageUrls(item);
     const cover = urls[0] || '';
@@ -1041,7 +1050,7 @@ function renderCards(listings, latest) {
   const priorityB = listings.filter((x) => (String(x.priority || '') === 'B' || (x.rooms ?? 0) < 2) && !x.isRemoved).length;
   const urgent = listings.filter((x) => getUrgency(x).level === 'high' && !x.isRemoved).length;
   const removed = listings.filter((x) => !!x.isRemoved).length;
-  const news = listings.filter((x) => !!x.isNew && !x.isRemoved).length;
+  const news = listings.filter((x) => isNewToday(x) && !x.isRemoved).length;
 
   cardsEl.innerHTML = '';
   cardsEl.append(
