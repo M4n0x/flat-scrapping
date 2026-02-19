@@ -2124,7 +2124,7 @@ async function main() {
       && item.nonSpeculativeEligible;
 
     if (item.isPearl && !item.withinHardBudget) {
-      item.priority = 'A★ (perle)';
+      item.priority = 'A★';
     }
 
     if (item.display) {
