@@ -36,10 +36,11 @@ Copy `.env.example` to `.env` and fill in the values you need:
 On first access, the home page shows the profile list (empty initially). Click **"Créer un profil"** to configure:
 
 - **Title** — short profile name (e.g. "Vevey et environs")
-- **Zones** — cities/municipalities to watch (slug + label)
+- **Zones** — search and select Swiss municipalities via autocomplete (powered by [geo.admin.ch](https://api3.geo.admin.ch)). Canton, slug, and coordinates are derived automatically.
 - **Budget** — max rent, hard cap, "pearl" threshold
 - **Rooms / minimum surface**
-- **Workplace address** — for distance calculation
+- **Workplace address** — autocomplete search for distance calculation
+- **Pearl detection** — toggle on/off, configure keywords, min rooms/surface, and hit threshold for listings slightly above budget that are worth flagging
 - **Sources** — which sites to enable (immobilier.ch, flatfox.ch, homegate.ch, anibis.ch)
 
 Each profile is independent with its own data and criteria.
@@ -80,7 +81,7 @@ The profile switcher in the dashboard header also allows quick switching.
 ## Project Structure
 
 ```
-apartment-search/
+flat-scrapping/
 ├── dashboard/          # Frontend (HTML/CSS/JS, zero framework)
 │   ├── home.html       # Home page / profile management
 │   ├── index.html      # Per-profile dashboard
@@ -96,16 +97,18 @@ apartment-search/
 │           ├── tracker.json          # Tracked listings
 │           ├── latest-listings.json  # Latest scan results
 │           └── geocode-cache.json    # Geocoding cache
+├── .env.example        # Environment variable template
 └── package.json
 ```
 
 ## How It Works
 
 1. **Scrape** — fetches listings from configured sources
-2. **Deduplication** — by ID (intra-source), then by composite key address+rooms+surface+price (cross-source)
-3. **Scoring** — each listing gets a score based on profile criteria
-4. **Tracker** — listings are persisted and their status is tracked across scans
-5. **Dashboard** — real-time display with filters, sorting, and actions
+2. **Deduplication** — by ID (intra-source), then by composite key address + rooms (floored) + surface (±5m²) + price (±50 CHF) for cross-source matching
+3. **Scoring** — each listing gets a 0-100 score based on profile criteria
+4. **Pearl detection** — listings slightly above budget with quality signals (configurable keywords) are flagged as "pearls"
+5. **Tracker** — listings are persisted and their status is tracked across scans
+6. **Dashboard** — real-time display with filters, sorting, and actions
 
 ## Port
 
