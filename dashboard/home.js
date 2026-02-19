@@ -337,12 +337,17 @@ function renderProfiles(profiles) {
     const card = document.createElement('article');
     card.className = 'profile-card';
 
+    const lastScan = p.lastScanAt
+      ? new Date(p.lastScanAt).toLocaleString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : 'Jamais';
+
     card.innerHTML = `
       <h3>${escapeHtml(p.label || p.name)}</h3>
       <div class="card-zones">${escapeHtml(p.areas || 'Aucune zone')}</div>
       <div class="card-stats">
         <span>📊 ${p.listingsCount ?? '–'} annonces</span>
         <span>💰 max ${p.maxRent ? `CHF ${p.maxRent}` : '–'}</span>
+        <span>🔄 ${escapeHtml(lastScan)}</span>
       </div>
       <div class="card-actions">
         <a href="/${encodeURIComponent(p.slug)}/dashboard" class="btn primary">Ouvrir</a>

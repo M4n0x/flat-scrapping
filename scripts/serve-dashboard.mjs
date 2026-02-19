@@ -240,7 +240,9 @@ async function listProfiles() {
       const areas = (cfg.areas || []).map((a) => a.label).join(' · ');
       const shortTitle = cfg.shortTitle || entry.name.charAt(0).toUpperCase() + entry.name.slice(1);
       const trackerPath = path.join(PROFILES_DATA_DIR, entry.name, 'tracker.json');
+      const latestPath = path.join(PROFILES_DATA_DIR, entry.name, 'latest-listings.json');
       const tracker = await readJsonSafe(trackerPath, { listings: [] });
+      const latest = await readJsonSafe(latestPath, {});
       const listingsCount = (tracker.listings || []).filter((x) => !x.isRemoved).length;
       profiles.push({
         slug: entry.name,
@@ -248,7 +250,8 @@ async function listProfiles() {
         label: `Profil – ${shortTitle}`,
         areas,
         listingsCount,
-        maxRent: cfg.filters?.maxTotalChf ?? null
+        maxRent: cfg.filters?.maxTotalChf ?? null,
+        lastScanAt: latest.generatedAt || null
       });
     }
     profiles.sort((a, b) => a.slug.localeCompare(b.slug));
