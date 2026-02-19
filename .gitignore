@@ -11,6 +11,7 @@ logs/
 # Optional local secrets
 .env
 .env.local
+ecosystem.config.cjs
 
 # OS / editor noise
 .DS_Store
