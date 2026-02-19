@@ -247,6 +247,7 @@ async function listProfiles() {
       profiles.push({
         slug: entry.name,
         name: cfg.name || entry.name,
+        shortTitle,
         label: `Profil – ${shortTitle}`,
         areas,
         listingsCount,

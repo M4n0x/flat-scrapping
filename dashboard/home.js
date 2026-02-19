@@ -341,23 +341,27 @@ function renderProfiles(profiles) {
       ? new Date(p.lastScanAt).toLocaleString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
       : 'Jamais';
 
+    const profileUrl = `/${encodeURIComponent(p.slug)}/dashboard`;
+
     card.innerHTML = `
-      <h3>${escapeHtml(p.label || p.name)}</h3>
-      <div class="card-zones">${escapeHtml(p.areas || 'Aucune zone')}</div>
+      <a href="${profileUrl}" class="card-link">
+        <h3>${escapeHtml(p.shortTitle || p.name)}</h3>
+        <div class="card-zones">${escapeHtml(p.areas || 'Aucune zone')}</div>
+      </a>
       <div class="card-stats">
         <span>📊 ${p.listingsCount ?? '–'} annonces</span>
-        <span>💰 max ${p.maxRent ? `CHF ${p.maxRent}` : '–'}</span>
+        <span>💰 max CHF ${p.maxRent ?? '–'}</span>
         <span>🔄 ${escapeHtml(lastScan)}</span>
       </div>
       <div class="card-actions">
-        <a href="/${encodeURIComponent(p.slug)}/dashboard" class="btn primary">Ouvrir</a>
-        <button type="button" class="btn ghost edit-btn" data-slug="${escapeHtml(p.slug)}">Modifier</button>
-        <button type="button" class="btn ghost delete-btn" data-slug="${escapeHtml(p.slug)}" data-name="${escapeHtml(p.label || p.slug)}">Supprimer</button>
+        <a href="${profileUrl}" class="btn primary">Ouvrir</a>
+        <button type="button" class="btn edit-btn" data-slug="${escapeHtml(p.slug)}">Modifier</button>
+        <button type="button" class="btn delete-btn" data-slug="${escapeHtml(p.slug)}" data-name="${escapeHtml(p.label || p.slug)}">Supprimer</button>
       </div>
     `;
 
-    card.querySelector('.edit-btn').addEventListener('click', () => editProfile(p.slug));
-    card.querySelector('.delete-btn').addEventListener('click', (e) => confirmDelete(e.currentTarget));
+    card.querySelector('.edit-btn').addEventListener('click', (e) => { e.preventDefault(); editProfile(p.slug); });
+    card.querySelector('.delete-btn').addEventListener('click', (e) => { e.preventDefault(); confirmDelete(e.currentTarget); });
 
     gridEl.appendChild(card);
   }
