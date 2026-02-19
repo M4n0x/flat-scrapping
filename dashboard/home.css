@@ -1,5 +1,10 @@
 .home-hero {
   margin-bottom: 32px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .home-hero h1 {
@@ -12,6 +17,78 @@
   color: var(--muted);
   font-size: 0.95rem;
   margin: 0;
+}
+
+.hero-actions {
+  flex-shrink: 0;
+}
+
+/* Scan all progress */
+.scan-all-progress {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 22px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scan-all-progress.hidden {
+  display: none;
+}
+
+.scan-all-progress .progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.scan-all-progress .progress-bar-wrap {
+  height: 6px;
+  background: rgba(135, 189, 194, 0.15);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.scan-all-progress .progress-bar {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+  width: 0%;
+}
+
+.scan-all-progress .progress-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.scan-all-progress .progress-details .profile-status {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.scan-all-progress .progress-details .profile-status.done {
+  border-color: rgba(86, 212, 184, 0.4);
+  color: var(--primary);
+}
+
+.scan-all-progress .progress-details .profile-status.error {
+  border-color: rgba(255, 127, 143, 0.4);
+  color: var(--danger);
+}
+
+.scan-all-progress .progress-details .profile-status.running {
+  border-color: rgba(255, 210, 122, 0.4);
+  color: var(--warn);
 }
 
 /* Profiles grid */

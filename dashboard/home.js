@@ -420,4 +420,78 @@ async function loadProfiles() {
   }
 }
 
+// --- Scan all ---
+
+const scanAllBtn = document.getElementById('scan-all-btn');
+const scanAllProgress = document.getElementById('scan-all-progress');
+
+scanAllBtn.addEventListener('click', async () => {
+  scanAllBtn.disabled = true;
+  scanAllBtn.textContent = '⏳ Lancement…';
+
+  try {
+    const res = await fetch('/api/run-scan-all', { method: 'POST' });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Erreur');
+
+    const { jobId } = data;
+    scanAllProgress.classList.remove('hidden');
+
+    const profileNames = allProfiles.reduce((m, p) => { m[p.slug] = p.shortTitle || p.slug; return m; }, {});
+
+    function renderProgress(job) {
+      const pct = job.total > 0 ? Math.round((job.done / job.total) * 100) : 0;
+      const isDone = job.status === 'done';
+
+      let detailsHtml = '';
+      const doneSlugs = new Set(job.results.map((r) => r.slug));
+      const allSlugs = allProfiles.map((p) => p.slug);
+      let foundRunning = false;
+
+      for (const slug of allSlugs) {
+        const result = job.results.find((r) => r.slug === slug);
+        const name = profileNames[slug] || slug;
+        if (result) {
+          const cls = result.ok ? 'done' : 'error';
+          detailsHtml += `<span class="profile-status ${cls}">${escapeHtml(name)} ${result.ok ? '✓' : '✗'}</span>`;
+        } else if (!isDone && !foundRunning) {
+          foundRunning = true;
+          detailsHtml += `<span class="profile-status running">${escapeHtml(name)} …</span>`;
+        } else {
+          detailsHtml += `<span class="profile-status">${escapeHtml(name)}</span>`;
+        }
+      }
+
+      scanAllProgress.innerHTML = `
+        <div class="progress-header">
+          <span>${isDone ? '✅ Scan terminé' : `⏳ Scan en cours… ${job.done}/${job.total}`}</span>
+          <span>${pct}%</span>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
+        <div class="progress-details">${detailsHtml}</div>
+      `;
+    }
+
+    const poll = setInterval(async () => {
+      try {
+        const statusRes = await fetch(`/api/scan-all-status?jobId=${encodeURIComponent(jobId)}`);
+        const job = await statusRes.json();
+        if (!job.ok) { clearInterval(poll); return; }
+        renderProgress(job);
+        if (job.status === 'done') {
+          clearInterval(poll);
+          scanAllBtn.disabled = false;
+          scanAllBtn.textContent = '🔄 Tout scanner';
+          await loadProfiles();
+        }
+      } catch { clearInterval(poll); }
+    }, 2000);
+
+  } catch (err) {
+    alert(`Erreur: ${err.message}`);
+    scanAllBtn.disabled = false;
+    scanAllBtn.textContent = '🔄 Tout scanner';
+  }
+});
+
 loadProfiles();

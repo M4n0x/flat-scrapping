@@ -13,6 +13,7 @@ const PROFILES_DATA_DIR = path.join(LEGACY_DATA_DIR, 'profiles');
 const SCRAPE_SCRIPT = path.join(ROOT, 'scripts', 'scrape-immobilier.mjs');
 
 const PORT = Number(process.env.PORT || 8787);
+const scanAllJobs = new Map();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -437,6 +438,42 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       return sendJson(res, 500, { ok: false, error: err.message });
     }
+  }
+
+  if (req.method === 'POST' && u.pathname === '/api/run-scan-all') {
+    // Return immediately, run scans in background
+    const profiles = await listProfiles();
+    const slugs = profiles.map((p) => p.slug);
+    const jobId = Date.now().toString(36);
+
+    scanAllJobs.set(jobId, { status: 'running', total: slugs.length, done: 0, results: [], startedAt: new Date().toISOString() });
+
+    (async () => {
+      const job = scanAllJobs.get(jobId);
+      for (const slug of slugs) {
+        try {
+          await ensureProfileStorage(slug);
+          const summary = await runScan(slug);
+          job.results.push({ slug, ok: true, summary });
+        } catch (err) {
+          job.results.push({ slug, ok: false, error: err.message });
+        }
+        job.done += 1;
+      }
+      job.status = 'done';
+      job.finishedAt = new Date().toISOString();
+      // Clean up old jobs after 10 minutes
+      setTimeout(() => scanAllJobs.delete(jobId), 10 * 60 * 1000);
+    })();
+
+    return sendJson(res, 202, { ok: true, jobId, total: slugs.length });
+  }
+
+  if (req.method === 'GET' && u.pathname === '/api/scan-all-status') {
+    const jobId = u.searchParams.get('jobId') || '';
+    const job = scanAllJobs.get(jobId);
+    if (!job) return sendJson(res, 404, { ok: false, error: 'Job not found' });
+    return sendJson(res, 200, { ok: true, ...job });
   }
 
   if (req.method === 'POST' && u.pathname === '/api/delete-listing') {
