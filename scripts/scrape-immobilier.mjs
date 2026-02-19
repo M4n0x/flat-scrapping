@@ -1712,7 +1712,7 @@ function buildCrossSourceDedupKey(item) {
   const address = buildAddressDedupKey(item);
   if (!address) return null;
 
-  const rooms = Number.isFinite(Number(item?.rooms)) ? Number(item.rooms).toFixed(1) : 'na';
+  const rooms = Number.isFinite(Number(item?.rooms)) ? String(Math.floor(Number(item.rooms))) : 'na';
   const surface = Number.isFinite(Number(item?.surfaceM2))
     ? String(Math.round(Number(item.surfaceM2) / 5) * 5)
     : 'na';
