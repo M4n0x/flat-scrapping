@@ -222,9 +222,11 @@
 
 /* Add profile card */
 .profile-card.add-card {
-  border-style: dashed;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  border-style: dashed;
   min-height: 180px;
   cursor: pointer;
   opacity: 0.7;

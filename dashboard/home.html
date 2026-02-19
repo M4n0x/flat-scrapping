@@ -50,6 +50,10 @@
 
           <div class="form-row">
             <label>
+              Loyer min (CHF)
+              <input type="number" id="f-min-rent" value="0" min="0" step="50" />
+            </label>
+            <label>
               Loyer max (CHF)
               <input type="number" id="f-max-rent" value="1400" min="0" step="50" />
             </label>
@@ -73,6 +77,10 @@
               <input type="number" id="f-min-surface" value="0" min="0" step="5" />
             </label>
           </div>
+
+          <label class="checkbox">
+            <input type="checkbox" id="f-allow-missing-surface" /> Inclure les annonces sans surface renseignée
+          </label>
 
           <label>
             Adresse de travail (pour calcul distance)

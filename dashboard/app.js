@@ -214,7 +214,7 @@ function createTravelCell(item) {
 }
 
 function travelInlineLabel(item) {
-  return `Liip: ${distanceLabel(item)} · 🚗 ${travelMinutesLabel(item, 'drive')} · 🚌 ${travelMinutesLabel(item, 'transit')}`;
+  return `Travail: ${distanceLabel(item)} · 🚗 ${travelMinutesLabel(item, 'drive')} · 🚌 ${travelMinutesLabel(item, 'transit')}`;
 }
 
 function card(label, value, key = 'all') {

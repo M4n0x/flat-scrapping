@@ -329,15 +329,17 @@ function isSizeEligible(item, config) {
   const minSurface = Number(config.filters?.minSurfaceM2Preferred ?? 0);
   const minSurfaceFallback = Number(config.filters?.minSurfaceM2Fallback ?? 0);
   const studioAllowed = !!config.filters?.allowStudioTransition;
+  const allowMissingSurface = config.filters?.allowMissingSurface !== false;
 
   const rooms = Number(item.rooms ?? 0);
   const surface = Number(item.surfaceM2 ?? 0);
+  const hasSurface = Number.isFinite(item.surfaceM2) && item.surfaceM2 > 0;
 
   const roomsOk = rooms >= minRooms || (studioAllowed && rooms < minRooms);
   
   // If minSurfaceFallback is set, use OR logic: rooms >= minRooms OR surface >= fallback
   if (minSurfaceFallback > 0) {
-    const surfaceFallbackOk = Number.isFinite(surface) && surface >= minSurfaceFallback;
+    const surfaceFallbackOk = hasSurface && surface >= minSurfaceFallback;
     if (roomsOk || surfaceFallbackOk) return true;
     return false;
   }
@@ -345,7 +347,11 @@ function isSizeEligible(item, config) {
   if (!roomsOk) return false;
 
   if (!Number.isFinite(minSurface) || minSurface <= 0) return true;
-  return Number.isFinite(surface) && surface >= minSurface;
+
+  // If surface is missing, defer to allowMissingSurface setting
+  if (!hasSurface) return allowMissingSurface;
+
+  return surface >= minSurface;
 }
 
 function isPearl(item, config) {
@@ -2097,11 +2103,13 @@ async function main() {
     item.priority = derivePriority(item, config);
     item.lastSeenAt = now;
 
+    const minBudget = Number(config.filters?.minTotalChf ?? 0);
     const hardBudget = config.filters?.maxTotalHardChf ?? 1450;
     item.excludedType = isExcludedType(item, config);
     item.sizeEligible = isSizeEligible(item, config);
     item.isPearl = isPearl(item, config);
     item.withinHardBudget = item.totalChf != null ? item.totalChf <= hardBudget : false;
+    item.aboveMinBudget = minBudget <= 0 || (item.totalChf != null && item.totalChf >= minBudget);
 
     const publicationMeta = publicationEligibility(item, config);
     item.publishedAgeDays = publicationMeta.ageDays;
@@ -2118,6 +2126,7 @@ async function main() {
 
     item.display = !item.excludedType
       && item.sizeEligible
+      && item.aboveMinBudget
       && (item.withinHardBudget || item.isPearl)
       && item.publicationEligible
       && item.locationEligible
@@ -2166,6 +2175,7 @@ async function main() {
 
     if (!item.display) {
       if (item.excludedType) item.filterReason = 'Type exclu (chambre/colocation)';
+      else if (!item.aboveMinBudget) item.filterReason = `En dessous de CHF ${minBudget}`;
       else if (!item.sizeEligible) item.filterReason = 'Taille non prioritaire';
       else if (!item.locationEligible) item.filterReason = item.locationFilterReason || 'Hors zones ciblées';
       else if (!item.nonSpeculativeEligible) item.filterReason = item.nonSpeculativeFilterReason || 'Bailleur hors liste non spéculative';

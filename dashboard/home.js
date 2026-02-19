@@ -213,11 +213,13 @@ function showForm(mode = 'create', profile = null) {
 
     document.getElementById('f-title').value = profile.shortTitle || '';
     zones = [...(profile.areas || [])];
+    document.getElementById('f-min-rent').value = profile.filters?.minTotalChf ?? 0;
     document.getElementById('f-max-rent').value = profile.filters?.maxTotalChf ?? 1400;
     document.getElementById('f-hard-max').value = profile.filters?.maxTotalHardChf ?? 1550;
     document.getElementById('f-pearl-max').value = profile.filters?.maxPearlTotalChf ?? 1650;
     document.getElementById('f-min-rooms').value = profile.filters?.minRoomsPreferred ?? 2;
     document.getElementById('f-min-surface').value = profile.filters?.minSurfaceM2Preferred ?? 0;
+    document.getElementById('f-allow-missing-surface').checked = profile.filters?.allowMissingSurface !== false;
     document.getElementById('f-workplace').value = profile.preferences?.workplaceAddress ?? '';
     document.getElementById('s-immobilier').checked = profile.sources?.immobilier !== false;
     document.getElementById('s-flatfox').checked = profile.sources?.flatfox !== false;
@@ -240,6 +242,7 @@ function showForm(mode = 'create', profile = null) {
     editSlugEl.value = '';
     formEl.reset();
     zones = [];
+    document.getElementById('f-allow-missing-surface').checked = true;
     pearlEnabledEl.checked = true;
     pearlOptionsEl.classList.remove('hidden');
   }
@@ -282,11 +285,13 @@ formEl.addEventListener('submit', async (e) => {
       anibis: document.getElementById('s-anibis').checked
     },
     filters: {
+      minTotalChf: Number(document.getElementById('f-min-rent').value) || 0,
       maxTotalChf: Number(document.getElementById('f-max-rent').value) || 1400,
       maxTotalHardChf: Number(document.getElementById('f-hard-max').value) || 1550,
       maxPearlTotalChf: Number(document.getElementById('f-pearl-max').value) || 1650,
       minRoomsPreferred: Number(document.getElementById('f-min-rooms').value) || 2,
       minSurfaceM2Preferred: Number(document.getElementById('f-min-surface').value) || 0,
+      allowMissingSurface: document.getElementById('f-allow-missing-surface').checked,
       allowStudioTransition: document.getElementById('f-studio').checked,
       pearl: {
         enabled: pearlEnabledEl.checked,
