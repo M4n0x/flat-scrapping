@@ -126,10 +126,11 @@ function publishedAgeDays(value) {
 }
 
 function resolveMaxPublishedAgeDays(config) {
-  const explicit = Number(config?.filters?.maxPublishedAgeDays);
+  const val = config?.filters?.maxPublishedAgeDays;
+  if (val === null || val === undefined || val === '') return 30;
+  const explicit = Number(val);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
-  if (PROFILE === 'fribourg' || PROFILE === 'saint-maurice') return 20;
-  return null;
+  return 30;
 }
 
 function publicationEligibility(item, config) {

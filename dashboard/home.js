@@ -219,6 +219,7 @@ function showForm(mode = 'create', profile = null) {
     document.getElementById('f-pearl-max').value = profile.filters?.maxPearlTotalChf ?? 1650;
     document.getElementById('f-min-rooms').value = profile.filters?.minRoomsPreferred ?? 2;
     document.getElementById('f-min-surface').value = profile.filters?.minSurfaceM2Preferred ?? 0;
+    document.getElementById('f-max-age').value = profile.filters?.maxPublishedAgeDays ?? 30;
     document.getElementById('f-allow-missing-surface').checked = profile.filters?.allowMissingSurface !== false;
     document.getElementById('f-workplace').value = profile.preferences?.workplaceAddress ?? '';
     document.getElementById('s-immobilier').checked = profile.sources?.immobilier !== false;
@@ -291,6 +292,7 @@ formEl.addEventListener('submit', async (e) => {
       maxPearlTotalChf: Number(document.getElementById('f-pearl-max').value) || 1650,
       minRoomsPreferred: Number(document.getElementById('f-min-rooms').value) || 2,
       minSurfaceM2Preferred: Number(document.getElementById('f-min-surface').value) || 0,
+      maxPublishedAgeDays: Number(document.getElementById('f-max-age').value) || 30,
       allowMissingSurface: document.getElementById('f-allow-missing-surface').checked,
       allowStudioTransition: document.getElementById('f-studio').checked,
       pearl: {
