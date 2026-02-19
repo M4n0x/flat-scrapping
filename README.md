@@ -11,11 +11,25 @@ Local dashboard for tracking apartment listings in Switzerland. Automatically sc
 
 ```bash
 git clone <repo-url>
-cd apartment-search
+cd flat-scrapping
+cp .env.example .env   # optional — only needed for homegate.ch
 npm start
 ```
 
 Open http://localhost:8787/ in your browser.
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in the values you need:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `HOMEGATE_API_USERNAME` | Only for homegate.ch | API username for Homegate's mobile API |
+| `HOMEGATE_API_PASSWORD` | Only for homegate.ch | API password |
+| `HOMEGATE_SECRET` | Only for homegate.ch | HMAC signing secret |
+| `PORT` | No | Server port (default: `8787`) |
+
+> **Note:** immobilier.ch, flatfox.ch, and anibis.ch work without any credentials. Homegate credentials are only needed if you enable it as a source in your profile.
 
 ## First Run
 
