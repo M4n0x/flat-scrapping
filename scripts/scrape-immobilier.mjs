@@ -335,16 +335,20 @@ function isSizeEligible(item, config) {
   const surface = Number(item.surfaceM2 ?? 0);
   const hasSurface = Number.isFinite(item.surfaceM2) && item.surfaceM2 > 0;
 
-  const roomsOk = rooms >= minRooms || (studioAllowed && rooms < minRooms);
-  
+  const meetsRooms = rooms >= minRooms;
+  const isBelowRooms = rooms < minRooms;
+
+  // Plan B (studio/transition): below min rooms but allowed — skip surface check
+  if (isBelowRooms && studioAllowed) return true;
+
   // If minSurfaceFallback is set, use OR logic: rooms >= minRooms OR surface >= fallback
   if (minSurfaceFallback > 0) {
     const surfaceFallbackOk = hasSurface && surface >= minSurfaceFallback;
-    if (roomsOk || surfaceFallbackOk) return true;
+    if (meetsRooms || surfaceFallbackOk) return true;
     return false;
   }
 
-  if (!roomsOk) return false;
+  if (!meetsRooms) return false;
 
   if (!Number.isFinite(minSurface) || minSurface <= 0) return true;
 
