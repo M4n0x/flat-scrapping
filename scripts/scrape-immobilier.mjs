@@ -1311,126 +1311,20 @@ function isTargetAreaCity(city = '', targetAreaSet) {
 function resolveImmobilierCanton(area = {}, config = {}) {
   const explicit = String(area?.canton || config?.canton || '').trim().toLowerCase();
   if (explicit) return explicit;
-  if (PROFILE === 'fribourg') return 'fribourg';
-  if (PROFILE === 'saint-maurice') return 'valais';
   return 'vaud';
 }
 
 function resolveFlatfoxAreaTokens(areas = []) {
   const tokens = new Set();
-  const push = (value) => {
-    const clean = String(value || '').trim().toLowerCase();
-    if (clean) tokens.add(clean);
-  };
 
   for (const area of areas) {
-    const slug = String(area?.slug || '').toLowerCase();
-    const label = String(area?.label || '').toLowerCase();
-    const combined = `${slug} ${label}`;
+    const label = String(area?.label || '').trim();
+    const slug = String(area?.slug || '').trim().toLowerCase();
 
-    if (combined.includes('vevey')) {
-      push('vevey');
-      push('1800');
-    }
-
-    if (combined.includes('tour') && combined.includes('peilz')) {
-      push('la-tour-de-peilz');
-      push('1814');
-    }
-
-    if (combined.includes('corseaux')) {
-      push('corseaux');
-      push('1802');
-    }
-
-    if (combined.includes('corsier')) {
-      push('corsier-sur-vevey');
-      push('corsier vevey');
-      push('1804');
-    }
-
-    // Removed deprecated tokens after Fribourg pivot.
-
-    if (combined.includes('renens')) {
-      push('renens');
-      push('1020');
-    }
-
-    if (combined.includes('prilly')) {
-      push('prilly');
-      push('1008');
-    }
-
-    if (combined.includes('pully')) {
-      push('pully');
-      push('1009');
-    }
-
-    if (combined.includes('ecublens')) {
-      push('ecublens');
-      push('ecublens vd');
-      push('1024');
-    }
-
-    if (combined.includes('sulpice')) {
-      push('st-sulpice-vd');
-      push('st-sulpice vd');
-      push('saint-sulpice');
-      push('1025');
-    }
-
-    if (combined.includes('jouxtens')) {
-      push('jouxtens-mezery');
-      push('jouxtens mezery');
-      push('1008');
-    }
-
-    // Removed deprecated tokens after Fribourg pivot.
-
-    if (combined.includes('echallens')) {
-      push('echallens');
-      push('1040');
-    }
-
-    if (combined.includes('chavannes')) {
-      push('chavannes-pres-renens');
-      push('chavannes près renens');
-      push('1022');
-    }
-
-    if (combined.includes('crissier')) {
-      push('crissier');
-      push('1023');
-    }
-
-    if (combined.includes('epalinges')) {
-      push('epalinges');
-      push('1066');
-    }
-
-    // Removed deprecated tokens after Fribourg pivot.
-
-    if (combined.includes('chatel') && combined.includes('denis')) {
-      push('chatel-saint-denis');
-      push('chatel-st-denis');
-      push('1618');
-    }
-
-    if (combined.includes('romont')) {
-      push('romont');
-      push('romont fr');
-      push('1680');
-    }
-
-    if (combined.includes('maurice')) {
-      push('st-maurice');
-      push('saint-maurice');
-      push('st maurice');
-      push('saint maurice');
-      push('1890');
-    }
-
-    push(slug.replace(/_/g, '-'));
+    // Flatfox works best with the original city name (with spaces/accents)
+    if (label) tokens.add(label);
+    // Also try the slug as fallback
+    if (slug) tokens.add(slug.replace(/_/g, '-'));
   }
 
   return [...tokens];

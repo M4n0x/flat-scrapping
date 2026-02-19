@@ -6,23 +6,194 @@ const formSubmitEl = document.getElementById('form-submit');
 const formCancelEl = document.getElementById('form-cancel');
 const editSlugEl = document.getElementById('edit-slug');
 const zonesListEl = document.getElementById('zones-list');
-const addZoneBtn = document.getElementById('add-zone');
+const zoneSearchEl = document.getElementById('zone-search');
+const zoneSuggestionsEl = document.getElementById('zone-suggestions');
 
 let zones = [];
 let allProfiles = [];
+let suggestAbort = null;
+let activeIndex = -1;
 
-// --- Zone management ---
+// --- Canton mapping ---
+
+const CANTON_MAP = {
+  ag: 'aargau', ai: 'appenzell-innerrhoden', ar: 'appenzell-ausserrhoden',
+  be: 'bern', bl: 'basel-landschaft', bs: 'basel-stadt',
+  fr: 'fribourg', ge: 'geneve', gl: 'glarus', gr: 'graubunden',
+  ju: 'jura', lu: 'luzern', ne: 'neuchatel', nw: 'nidwalden',
+  ow: 'obwalden', sg: 'st-gallen', sh: 'schaffhausen', so: 'solothurn',
+  sz: 'schwyz', tg: 'thurgau', ti: 'ticino', ur: 'uri',
+  vd: 'vaud', vs: 'valais', zg: 'zug', zh: 'zurich'
+};
+
+// --- Autocomplete ---
+
+function buildSlug(label) {
+  return label
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function parseGeoResult(result) {
+  const a = result.attrs;
+  const rawLabel = (a.label || '').replace(/<[^>]+>/g, '').trim();
+  const detail = (a.detail || '').toLowerCase();
+
+  // Extract canton abbreviation from detail (e.g. "vevey vd" -> "vd")
+  const cantonMatch = detail.match(/\b([a-z]{2})$/);
+  const cantonAbbr = cantonMatch ? cantonMatch[1] : '';
+  const canton = CANTON_MAP[cantonAbbr] || cantonAbbr;
+
+  // Extract clean city name (remove canton suffix like "(VD)")
+  const cityName = rawLabel.replace(/\s*\([A-Z]{2}\)\s*$/, '').trim();
+
+  return {
+    label: cityName,
+    slug: buildSlug(cityName),
+    canton,
+    cantonAbbr: cantonAbbr.toUpperCase(),
+    npa: null, // geo.admin.ch gg25 doesn't always return NPA
+    lat: a.lat,
+    lon: a.lon
+  };
+}
+
+async function searchLocations(query) {
+  if (suggestAbort) suggestAbort.abort();
+  const controller = new AbortController();
+  suggestAbort = controller;
+
+  const url = `https://api3.geo.admin.ch/rest/services/api/SearchServer?searchText=${encodeURIComponent(query)}&type=locations&origins=gg25&limit=8`;
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    const data = await res.json();
+    return (data.results || []).map(parseGeoResult);
+  } catch (err) {
+    if (err.name === 'AbortError') return [];
+    console.error('Geo search error:', err);
+    return [];
+  }
+}
+
+function renderSuggestions(results) {
+  zoneSuggestionsEl.innerHTML = '';
+  activeIndex = -1;
+
+  if (!results.length) {
+    zoneSuggestionsEl.classList.add('hidden');
+    return;
+  }
+
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const li = document.createElement('li');
+    li.dataset.index = i;
+    li.innerHTML = `
+      <span class="suggestion-label">${escapeHtml(r.label)}</span>
+      <span class="suggestion-detail">${escapeHtml(r.cantonAbbr)} · slug: ${escapeHtml(r.slug)} · canton: ${escapeHtml(r.canton)}</span>
+    `;
+    li.addEventListener('click', () => selectSuggestion(r));
+    li.addEventListener('mouseenter', () => {
+      setActiveSuggestion(i);
+    });
+    zoneSuggestionsEl.appendChild(li);
+  }
+
+  zoneSuggestionsEl.classList.remove('hidden');
+}
+
+function setActiveSuggestion(index) {
+  const items = zoneSuggestionsEl.querySelectorAll('li');
+  items.forEach((li) => li.classList.remove('active'));
+  activeIndex = index;
+  if (index >= 0 && index < items.length) {
+    items[index].classList.add('active');
+    items[index].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function selectSuggestion(result) {
+  if (zones.some((z) => z.slug === result.slug)) {
+    // Already added — just clear
+    zoneSearchEl.value = '';
+    zoneSuggestionsEl.classList.add('hidden');
+    return;
+  }
+
+  zones.push({
+    slug: result.slug,
+    label: result.label,
+    canton: result.canton,
+    lat: result.lat,
+    lon: result.lon
+  });
+
+  zoneSearchEl.value = '';
+  zoneSuggestionsEl.classList.add('hidden');
+  renderZones();
+}
+
+let searchTimer = null;
+zoneSearchEl.addEventListener('input', () => {
+  const q = zoneSearchEl.value.trim();
+  clearTimeout(searchTimer);
+
+  if (q.length < 2) {
+    zoneSuggestionsEl.classList.add('hidden');
+    return;
+  }
+
+  searchTimer = setTimeout(async () => {
+    const results = await searchLocations(q);
+    // Store results for keyboard nav
+    zoneSearchEl._results = results;
+    renderSuggestions(results);
+  }, 250);
+});
+
+zoneSearchEl.addEventListener('keydown', (e) => {
+  const results = zoneSearchEl._results || [];
+  const items = zoneSuggestionsEl.querySelectorAll('li');
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    setActiveSuggestion(Math.min(activeIndex + 1, items.length - 1));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    setActiveSuggestion(Math.max(activeIndex - 1, 0));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (activeIndex >= 0 && activeIndex < results.length) {
+      selectSuggestion(results[activeIndex]);
+    }
+  } else if (e.key === 'Escape') {
+    zoneSuggestionsEl.classList.add('hidden');
+  }
+});
+
+// Close suggestions on outside click
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.zone-autocomplete-wrap')) {
+    zoneSuggestionsEl.classList.add('hidden');
+  }
+});
+
+// --- Zone rendering ---
 
 function renderZones() {
   zonesListEl.innerHTML = '';
   if (!zones.length) {
-    zonesListEl.innerHTML = '<span style="color:var(--muted);font-size:0.82rem">Aucune zone ajoutée</span>';
+    zonesListEl.innerHTML = '<span style="color:var(--muted);font-size:0.82rem">Aucune zone ajoutée — recherchez une commune ci-dessous</span>';
     return;
   }
   for (const z of zones) {
     const chip = document.createElement('span');
     chip.className = 'zone-chip';
-    chip.innerHTML = `${escapeHtml(z.label)} <small style="opacity:.6">(${escapeHtml(z.slug)})</small>
+    const cantonBadge = z.canton ? ` <small style="opacity:.6">${escapeHtml(z.canton)}</small>` : '';
+    chip.innerHTML = `${escapeHtml(z.label)}${cantonBadge}
       <button type="button" class="remove-zone" title="Retirer">&times;</button>`;
     chip.querySelector('.remove-zone').addEventListener('click', () => {
       zones = zones.filter((x) => x.slug !== z.slug);
@@ -31,19 +202,6 @@ function renderZones() {
     zonesListEl.appendChild(chip);
   }
 }
-
-addZoneBtn.addEventListener('click', () => {
-  const slugInput = document.getElementById('zone-slug');
-  const labelInput = document.getElementById('zone-label');
-  const slug = slugInput.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
-  const label = labelInput.value.trim();
-  if (!slug || !label) return;
-  if (zones.some((z) => z.slug === slug)) return;
-  zones.push({ slug, label });
-  slugInput.value = '';
-  labelInput.value = '';
-  renderZones();
-});
 
 // --- Form logic ---
 
@@ -84,6 +242,8 @@ function hideForm() {
   createSection.classList.add('hidden');
   editSlugEl.value = '';
   zones = [];
+  zoneSearchEl.value = '';
+  zoneSuggestionsEl.classList.add('hidden');
 }
 
 formCancelEl.addEventListener('click', hideForm);

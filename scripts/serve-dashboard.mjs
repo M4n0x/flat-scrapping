@@ -260,10 +260,16 @@ async function listProfiles() {
 
 function buildConfigFromPayload(payload) {
   const shortTitle = String(payload.shortTitle || '').trim();
-  const areas = Array.isArray(payload.areas) ? payload.areas.map((a) => ({
-    slug: String(a.slug || '').trim(),
-    label: String(a.label || '').trim()
-  })).filter((a) => a.slug && a.label) : [];
+  const areas = Array.isArray(payload.areas) ? payload.areas.map((a) => {
+    const entry = {
+      slug: String(a.slug || '').trim(),
+      label: String(a.label || '').trim()
+    };
+    if (a.canton) entry.canton = String(a.canton).trim().toLowerCase();
+    if (a.lat != null) entry.lat = Number(a.lat);
+    if (a.lon != null) entry.lon = Number(a.lon);
+    return entry;
+  }).filter((a) => a.slug && a.label) : [];
 
   const filters = payload.filters || {};
   const sources = payload.sources || {};

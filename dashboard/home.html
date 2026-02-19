@@ -37,9 +37,10 @@
             <legend>Zones de recherche</legend>
             <div id="zones-list" class="zones-list"></div>
             <div class="zone-add-row">
-              <input type="text" id="zone-slug" placeholder="slug (ex: vevey)" />
-              <input type="text" id="zone-label" placeholder="label (ex: Vevey)" />
-              <button type="button" id="add-zone" class="btn ghost small">+ Ajouter</button>
+              <div class="zone-autocomplete-wrap">
+                <input type="text" id="zone-search" placeholder="Rechercher une commune…" autocomplete="off" />
+                <ul id="zone-suggestions" class="zone-suggestions hidden"></ul>
+              </div>
             </div>
           </fieldset>
 
