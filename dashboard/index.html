@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apartment Ops — Dashboard</title>
+    <link rel="stylesheet" href="/dashboard/styles.css" />
+  </head>
+  <body>
+    <div class="bg-layer" aria-hidden="true"></div>
+
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Apartment Ops</p>
+          <h1>Chargement du profil…</h1>
+          <p id="zones" class="sub"></p>
+          <p id="sub" class="sub"></p>
+        </div>
+
+        <div class="actions">
+          <select id="profile-switcher" class="profile-switcher" aria-label="Changer de profil"></select>
+          <button id="refresh" class="btn ghost">Rafraîchir</button>
+          <button id="scan" class="btn primary">Lancer un scan</button>
+        </div>
+      </header>
+
+      <pre id="scan-output" class="scan-output hidden"></pre>
+
+      <section class="cards" id="cards"></section>
+
+      <section class="control-bar">
+        <label>
+          Filtre
+          <select id="priority-filter">
+            <option value="all">Toutes</option>
+            <option value="top">Priorité A / A★</option>
+            <option value="transition">Priorité B (studio / 1.5)</option>
+            <option value="pearl">Perles ⭐</option>
+          </select>
+        </label>
+
+        <label>
+          Trier
+          <select id="sort-by">
+            <option value="score">Score</option>
+            <option value="price">Loyer</option>
+            <option value="area">Zone</option>
+          </select>
+        </label>
+
+        <label class="search-wrap">
+          Recherche
+          <input id="search-box" type="search" placeholder="adresse, type, zone…" />
+        </label>
+      </section>
+
+      <section class="view-tabs-wrap">
+        <nav class="view-tabs" aria-label="Changer de vue">
+          <button id="tab-table" class="view-tab active" data-view="table" type="button">Vue tableau</button>
+          <button id="tab-kanban" class="view-tab" data-view="kanban" type="button">Vue kanban</button>
+        </nav>
+
+        <div id="panel-table" class="view-panel active">
+          <section class="desktop-board">
+            <div class="section-head compact">
+              <h2>Table détaillée</h2>
+              <p>Vue complète pour tri fin et prise de notes.</p>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Priorité</th>
+                  <th>Score</th>
+                  <th>Image</th>
+                  <th>Bien</th>
+                  <th>Loyer total</th>
+                  <th>Publié</th>
+                  <th>Distance Liip</th>
+                  <th>Statut</th>
+                  <th>Notes</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </section>
+
+          <section class="mobile-board" id="mobile-rows"></section>
+        </div>
+
+        <div id="panel-kanban" class="view-panel">
+          <section class="kanban-wrap">
+            <div class="section-head">
+              <h2>Kanban pipeline</h2>
+              <p>Vision rapide par statut + actions directes.</p>
+            </div>
+            <div id="kanban-board" class="kanban-board"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/dashboard/app.js"></script>
+  </body>
+</html>

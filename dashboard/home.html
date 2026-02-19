@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apartment Ops — Profils</title>
+    <link rel="stylesheet" href="/dashboard/styles.css" />
+    <link rel="stylesheet" href="/dashboard/home.css" />
+  </head>
+  <body>
+    <div class="bg-layer" aria-hidden="true"></div>
+
+    <main class="app-shell">
+      <header class="home-hero">
+        <div>
+          <p class="eyebrow">Apartment Ops</p>
+          <h1>Mes profils de recherche</h1>
+          <p class="sub">Chaque profil surveille des zones et des critères différents.</p>
+        </div>
+      </header>
+
+      <section id="profiles-grid" class="profiles-grid">
+        <p class="loading-msg">Chargement…</p>
+      </section>
+
+      <section id="create-section" class="create-section hidden">
+        <h2 id="form-title">Nouveau profil</h2>
+        <form id="profile-form" class="profile-form" autocomplete="off">
+          <input type="hidden" id="edit-slug" value="" />
+
+          <label>
+            Titre court
+            <input type="text" id="f-title" placeholder="Ex: Vevey et environs" required />
+          </label>
+
+          <fieldset class="zones-fieldset">
+            <legend>Zones de recherche</legend>
+            <div id="zones-list" class="zones-list"></div>
+            <div class="zone-add-row">
+              <input type="text" id="zone-slug" placeholder="slug (ex: vevey)" />
+              <input type="text" id="zone-label" placeholder="label (ex: Vevey)" />
+              <button type="button" id="add-zone" class="btn ghost small">+ Ajouter</button>
+            </div>
+          </fieldset>
+
+          <div class="form-row">
+            <label>
+              Loyer max (CHF)
+              <input type="number" id="f-max-rent" value="1400" min="0" step="50" />
+            </label>
+            <label>
+              Seuil dur (CHF)
+              <input type="number" id="f-hard-max" value="1550" min="0" step="50" />
+            </label>
+            <label>
+              Seuil perle (CHF)
+              <input type="number" id="f-pearl-max" value="1650" min="0" step="50" />
+            </label>
+          </div>
+
+          <div class="form-row">
+            <label>
+              Pièces min
+              <input type="number" id="f-min-rooms" value="2" min="1" max="10" step="0.5" />
+            </label>
+            <label>
+              Surface min (m²)
+              <input type="number" id="f-min-surface" value="0" min="0" step="5" />
+            </label>
+          </div>
+
+          <label>
+            Adresse de travail (pour calcul distance)
+            <input type="text" id="f-workplace" placeholder="Ex: Rue Etraz 4, 1003 Lausanne" />
+          </label>
+
+          <fieldset class="sources-fieldset">
+            <legend>Sources</legend>
+            <label class="checkbox"><input type="checkbox" id="s-immobilier" checked /> immobilier.ch</label>
+            <label class="checkbox"><input type="checkbox" id="s-flatfox" checked /> flatfox.ch</label>
+            <label class="checkbox"><input type="checkbox" id="s-homegate" /> homegate.ch</label>
+            <label class="checkbox"><input type="checkbox" id="s-anibis" /> anibis.ch</label>
+          </fieldset>
+
+          <label class="checkbox">
+            <input type="checkbox" id="f-studio" /> Inclure les plans B (studios / en dessous du min. de pièces)
+          </label>
+
+          <div class="form-actions">
+            <button type="submit" class="btn primary" id="form-submit">Créer le profil</button>
+            <button type="button" class="btn ghost" id="form-cancel">Annuler</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script type="module" src="/dashboard/home.js"></script>
+  </body>
+</html>

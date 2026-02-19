@@ -1,0 +1,14 @@
+{
+  "name": "apartment-search",
+  "version": "1.0.0",
+  "description": "Dashboard local pour suivre une recherche d'appartement en Suisse (immobilier.ch, flatfox.ch, homegate.ch, anibis.ch)",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve-dashboard.mjs",
+    "scan": "node scripts/scrape-immobilier.mjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

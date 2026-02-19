@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Runtime outputs
+logs/
+*.log
+
+# Local/runtime scraped data
+/data/
+
+# Optional local secrets
+.env
+.env.*
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
