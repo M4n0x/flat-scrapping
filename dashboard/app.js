@@ -750,6 +750,14 @@ function renderDesktop(listings) {
     if (item.isRemoved) notesInput.disabled = true;
     tdNotes.appendChild(notesInput);
 
+    if (!item.isRemoved) {
+      select.addEventListener('change', async () => {
+        select.disabled = true;
+        await updateStatus(item.id, select.value, notesInput.value);
+        await load();
+      });
+    }
+
     const tdAction = document.createElement('td');
 
     if (item.isRemoved) {
@@ -890,14 +898,13 @@ function renderKanban(listings) {
         const select = createStatusSelect(item);
         select.draggable = false;
 
-        const save = createSaveButton(async () => {
-          const ok = await updateStatus(item.id, select.value, item.notes || '');
-          if (ok) await load();
-          return ok;
+        select.addEventListener('change', async () => {
+          select.disabled = true;
+          await updateStatus(item.id, select.value, item.notes || '');
+          await load();
         });
-        save.draggable = false;
 
-        actions.append(select, save);
+        actions.append(select);
       } else {
         const retired = document.createElement('div');
         retired.className = 'k-retired-note';
@@ -990,6 +997,12 @@ function renderMobile(listings) {
       const notesInput = document.createElement('input');
       notesInput.value = item.notes || '';
       notesInput.placeholder = 'notes';
+
+      select.addEventListener('change', async () => {
+        select.disabled = true;
+        await updateStatus(item.id, select.value, notesInput.value);
+        await load();
+      });
 
       const saveBtn = createSaveButton(() => updateStatus(item.id, select.value, notesInput.value));
       controls.append(select, notesInput, saveBtn);
