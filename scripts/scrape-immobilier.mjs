@@ -349,20 +349,28 @@ function isSizeEligible(item, config) {
 }
 
 function isPearl(item, config) {
+  const pearlCfg = config.filters?.pearl || {};
+  if (pearlCfg.enabled === false) return false;
+
   const hardBudget = config.filters?.maxTotalHardChf ?? 1450;
   const cap = config.filters?.maxPearlTotalChf ?? 1550;
   const total = item.totalChf;
   if (total == null || total <= hardBudget || total > cap) return false;
 
+  const minRooms = pearlCfg.minRooms ?? 2;
+  const minSurface = pearlCfg.minSurfaceM2 ?? 50;
   const rooms = item.rooms ?? 0;
   const surface = item.surfaceM2 ?? 0;
-  if (rooms < 2 || surface < 50) return false;
+  if (rooms < minRooms || surface < minSurface) return false;
 
   const text = `${item.title || ''} ${item.objectType || ''} ${item.address || ''}`.toLowerCase();
-  const signals = ['renove', 'rénové', 'balcon', 'terrasse', 'vue', 'quartier paisible', 'lac', 'centre'];
-  const hits = signals.filter((s) => text.includes(s)).length;
+  const keywords = Array.isArray(pearlCfg.keywords) && pearlCfg.keywords.length
+    ? pearlCfg.keywords
+    : ['renove', 'rénové', 'balcon', 'terrasse', 'vue', 'quartier paisible', 'lac', 'centre'];
+  const minHits = pearlCfg.minHits ?? 1;
+  const hits = keywords.filter((s) => text.includes(String(s).toLowerCase())).length;
 
-  return hits >= 1;
+  return hits >= minHits;
 }
 
 function normalizeStatus(status = '') {

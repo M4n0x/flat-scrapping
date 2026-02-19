@@ -72,8 +72,38 @@
 
           <label>
             Adresse de travail (pour calcul distance)
-            <input type="text" id="f-workplace" placeholder="Ex: Rue Etraz 4, 1003 Lausanne" />
+            <div class="zone-autocomplete-wrap">
+              <input type="text" id="f-workplace" placeholder="Rechercher une adresse…" autocomplete="off" />
+              <ul id="workplace-suggestions" class="zone-suggestions hidden"></ul>
+            </div>
           </label>
+
+          <fieldset class="pearl-fieldset">
+            <legend>Perles (annonces au-dessus du budget mais intéressantes)</legend>
+            <label class="checkbox">
+              <input type="checkbox" id="f-pearl-enabled" checked /> Activer la détection de perles
+            </label>
+            <div id="pearl-options" class="pearl-options">
+              <div class="form-row">
+                <label>
+                  Min pièces (perle)
+                  <input type="number" id="f-pearl-min-rooms" value="2" min="1" max="10" step="0.5" />
+                </label>
+                <label>
+                  Min surface m² (perle)
+                  <input type="number" id="f-pearl-min-surface" value="50" min="0" step="5" />
+                </label>
+              </div>
+              <label>
+                Mots-clés perle <small style="color:var(--muted)">(séparés par des virgules)</small>
+                <input type="text" id="f-pearl-keywords" value="rénové, balcon, terrasse, vue, quartier paisible, lac, centre" placeholder="rénové, balcon, terrasse, vue…" />
+              </label>
+              <label>
+                Hits minimum <small style="color:var(--muted)">(combien de mots-clés doivent matcher)</small>
+                <input type="number" id="f-pearl-min-hits" value="1" min="1" max="5" step="1" />
+              </label>
+            </div>
+          </fieldset>
 
           <fieldset class="sources-fieldset">
             <legend>Sources</legend>

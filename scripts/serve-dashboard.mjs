@@ -294,6 +294,13 @@ function buildConfigFromPayload(payload) {
       minRoomsPreferred: Number(filters.minRoomsPreferred) || 2,
       minSurfaceM2Preferred: Number(filters.minSurfaceM2Preferred) || 0,
       allowStudioTransition: !!filters.allowStudioTransition,
+      pearl: filters.pearl && typeof filters.pearl === 'object' ? {
+        enabled: filters.pearl.enabled !== false,
+        minRooms: Number(filters.pearl.minRooms) || 2,
+        minSurfaceM2: Number(filters.pearl.minSurfaceM2) || 50,
+        keywords: Array.isArray(filters.pearl.keywords) ? filters.pearl.keywords.filter(Boolean) : ['rénové', 'balcon', 'terrasse', 'vue', 'quartier paisible', 'lac', 'centre'],
+        minHits: Number(filters.pearl.minHits) || 1
+      } : { enabled: true, minRooms: 2, minSurfaceM2: 50, keywords: ['rénové', 'balcon', 'terrasse', 'vue', 'quartier paisible', 'lac', 'centre'], minHits: 1 },
       excludedObjectTypeKeywords: ['chambre', 'colocation', 'wg'],
       missingScansBeforeRemoved: 2,
       maxPublishedAgeDays: null

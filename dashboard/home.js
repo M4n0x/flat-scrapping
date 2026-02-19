@@ -8,6 +8,10 @@ const editSlugEl = document.getElementById('edit-slug');
 const zonesListEl = document.getElementById('zones-list');
 const zoneSearchEl = document.getElementById('zone-search');
 const zoneSuggestionsEl = document.getElementById('zone-suggestions');
+const workplaceEl = document.getElementById('f-workplace');
+const workplaceSuggestionsEl = document.getElementById('workplace-suggestions');
+const pearlEnabledEl = document.getElementById('f-pearl-enabled');
+const pearlOptionsEl = document.getElementById('pearl-options');
 
 let zones = [];
 let allProfiles = [];
@@ -60,125 +64,119 @@ function parseGeoResult(result) {
   };
 }
 
-async function searchLocations(query) {
-  if (suggestAbort) suggestAbort.abort();
-  const controller = new AbortController();
-  suggestAbort = controller;
+// --- Generic geo.admin.ch autocomplete ---
 
-  const url = `https://api3.geo.admin.ch/rest/services/api/SearchServer?searchText=${encodeURIComponent(query)}&type=locations&origins=gg25&limit=8`;
+function createGeoAutocomplete({ inputEl, listEl, origins, renderItem, onSelect, minChars = 2 }) {
+  let abort = null;
+  let timer = null;
+  let results = [];
+  let idx = -1;
 
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    const data = await res.json();
-    return (data.results || []).map(parseGeoResult);
-  } catch (err) {
-    if (err.name === 'AbortError') return [];
-    console.error('Geo search error:', err);
-    return [];
-  }
-}
-
-function renderSuggestions(results) {
-  zoneSuggestionsEl.innerHTML = '';
-  activeIndex = -1;
-
-  if (!results.length) {
-    zoneSuggestionsEl.classList.add('hidden');
-    return;
+  async function search(query) {
+    if (abort) abort.abort();
+    const controller = new AbortController();
+    abort = controller;
+    const originsParam = origins ? `&origins=${origins}` : '';
+    const url = `https://api3.geo.admin.ch/rest/services/api/SearchServer?searchText=${encodeURIComponent(query)}&type=locations${originsParam}&limit=8`;
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      const data = await res.json();
+      return (data.results || []).map(parseGeoResult);
+    } catch (err) {
+      if (err.name === 'AbortError') return [];
+      return [];
+    }
   }
 
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    const li = document.createElement('li');
-    li.dataset.index = i;
-    li.innerHTML = `
-      <span class="suggestion-label">${escapeHtml(r.label)}</span>
-      <span class="suggestion-detail">${escapeHtml(r.cantonAbbr)} · slug: ${escapeHtml(r.slug)} · canton: ${escapeHtml(r.canton)}</span>
-    `;
-    li.addEventListener('click', () => selectSuggestion(r));
-    li.addEventListener('mouseenter', () => {
-      setActiveSuggestion(i);
-    });
-    zoneSuggestionsEl.appendChild(li);
+  function render(items) {
+    listEl.innerHTML = '';
+    idx = -1;
+    results = items;
+    if (!items.length) { listEl.classList.add('hidden'); return; }
+    for (let i = 0; i < items.length; i++) {
+      const li = document.createElement('li');
+      li.dataset.index = i;
+      li.innerHTML = renderItem(items[i]);
+      li.addEventListener('click', () => { onSelect(items[i]); listEl.classList.add('hidden'); });
+      li.addEventListener('mouseenter', () => setActive(i));
+      listEl.appendChild(li);
+    }
+    listEl.classList.remove('hidden');
   }
 
-  zoneSuggestionsEl.classList.remove('hidden');
-}
-
-function setActiveSuggestion(index) {
-  const items = zoneSuggestionsEl.querySelectorAll('li');
-  items.forEach((li) => li.classList.remove('active'));
-  activeIndex = index;
-  if (index >= 0 && index < items.length) {
-    items[index].classList.add('active');
-    items[index].scrollIntoView({ block: 'nearest' });
-  }
-}
-
-function selectSuggestion(result) {
-  if (zones.some((z) => z.slug === result.slug)) {
-    // Already added — just clear
-    zoneSearchEl.value = '';
-    zoneSuggestionsEl.classList.add('hidden');
-    return;
+  function setActive(i) {
+    const items = listEl.querySelectorAll('li');
+    items.forEach((li) => li.classList.remove('active'));
+    idx = i;
+    if (i >= 0 && i < items.length) { items[i].classList.add('active'); items[i].scrollIntoView({ block: 'nearest' }); }
   }
 
-  zones.push({
-    slug: result.slug,
-    label: result.label,
-    canton: result.canton,
-    lat: result.lat,
-    lon: result.lon
+  inputEl.addEventListener('input', () => {
+    const q = inputEl.value.trim();
+    clearTimeout(timer);
+    if (q.length < minChars) { listEl.classList.add('hidden'); return; }
+    timer = setTimeout(async () => { render(await search(q)); }, 250);
   });
 
-  zoneSearchEl.value = '';
-  zoneSuggestionsEl.classList.add('hidden');
-  renderZones();
+  inputEl.addEventListener('keydown', (e) => {
+    const items = listEl.querySelectorAll('li');
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(idx + 1, items.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(idx - 1, 0)); }
+    else if (e.key === 'Enter' && idx >= 0 && idx < results.length) { e.preventDefault(); onSelect(results[idx]); listEl.classList.add('hidden'); }
+    else if (e.key === 'Escape') { listEl.classList.add('hidden'); }
+  });
 }
 
-let searchTimer = null;
-zoneSearchEl.addEventListener('input', () => {
-  const q = zoneSearchEl.value.trim();
-  clearTimeout(searchTimer);
-
-  if (q.length < 2) {
-    zoneSuggestionsEl.classList.add('hidden');
-    return;
-  }
-
-  searchTimer = setTimeout(async () => {
-    const results = await searchLocations(q);
-    // Store results for keyboard nav
-    zoneSearchEl._results = results;
-    renderSuggestions(results);
-  }, 250);
-});
-
-zoneSearchEl.addEventListener('keydown', (e) => {
-  const results = zoneSearchEl._results || [];
-  const items = zoneSuggestionsEl.querySelectorAll('li');
-
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    setActiveSuggestion(Math.min(activeIndex + 1, items.length - 1));
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    setActiveSuggestion(Math.max(activeIndex - 1, 0));
-  } else if (e.key === 'Enter') {
-    e.preventDefault();
-    if (activeIndex >= 0 && activeIndex < results.length) {
-      selectSuggestion(results[activeIndex]);
-    }
-  } else if (e.key === 'Escape') {
-    zoneSuggestionsEl.classList.add('hidden');
-  }
-});
-
-// Close suggestions on outside click
+// Close all suggestion dropdowns on outside click
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.zone-autocomplete-wrap')) {
-    zoneSuggestionsEl.classList.add('hidden');
+    document.querySelectorAll('.zone-suggestions').forEach((el) => el.classList.add('hidden'));
   }
+});
+
+// --- Zone autocomplete ---
+
+createGeoAutocomplete({
+  inputEl: zoneSearchEl,
+  listEl: zoneSuggestionsEl,
+  origins: 'gg25',
+  renderItem: (r) => `
+    <span class="suggestion-label">${escapeHtml(r.label)}</span>
+    <span class="suggestion-detail">${escapeHtml(r.cantonAbbr)} · ${escapeHtml(r.canton)}</span>
+  `,
+  onSelect: (r) => {
+    if (zones.some((z) => z.slug === r.slug)) { zoneSearchEl.value = ''; return; }
+    zones.push({ slug: r.slug, label: r.label, canton: r.canton, lat: r.lat, lon: r.lon });
+    zoneSearchEl.value = '';
+    renderZones();
+  }
+});
+
+// --- Workplace autocomplete ---
+
+createGeoAutocomplete({
+  inputEl: workplaceEl,
+  listEl: workplaceSuggestionsEl,
+  origins: null, // search all (addresses, places, etc.)
+  renderItem: (r) => `<span class="suggestion-label">${escapeHtml(r.label)}</span>`,
+  onSelect: (r) => { workplaceEl.value = r.label; },
+  minChars: 3
+});
+
+// Prevent workplace autocomplete from clearing value on select (override default)
+workplaceEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    // Don't let generic handler clear the input for workplace
+    const list = workplaceSuggestionsEl;
+    if (list.classList.contains('hidden')) return; // let form submit
+    e.preventDefault();
+  }
+});
+
+// --- Pearl toggle ---
+
+pearlEnabledEl.addEventListener('change', () => {
+  pearlOptionsEl.classList.toggle('hidden', !pearlEnabledEl.checked);
 });
 
 // --- Zone rendering ---
@@ -226,12 +224,24 @@ function showForm(mode = 'create', profile = null) {
     document.getElementById('s-homegate').checked = !!profile.sources?.homegate;
     document.getElementById('s-anibis').checked = !!profile.sources?.anibis;
     document.getElementById('f-studio').checked = !!profile.filters?.allowStudioTransition;
+
+    // Pearl config
+    const pearl = profile.filters?.pearl || {};
+    const pearlEnabled = pearl.enabled !== false;
+    pearlEnabledEl.checked = pearlEnabled;
+    pearlOptionsEl.classList.toggle('hidden', !pearlEnabled);
+    document.getElementById('f-pearl-min-rooms').value = pearl.minRooms ?? 2;
+    document.getElementById('f-pearl-min-surface').value = pearl.minSurfaceM2 ?? 50;
+    document.getElementById('f-pearl-keywords').value = (pearl.keywords || ['rénové', 'balcon', 'terrasse', 'vue', 'quartier paisible', 'lac', 'centre']).join(', ');
+    document.getElementById('f-pearl-min-hits').value = pearl.minHits ?? 1;
   } else {
     formTitleEl.textContent = 'Nouveau profil';
     formSubmitEl.textContent = 'Créer le profil';
     editSlugEl.value = '';
     formEl.reset();
     zones = [];
+    pearlEnabledEl.checked = true;
+    pearlOptionsEl.classList.remove('hidden');
   }
 
   renderZones();
@@ -277,7 +287,14 @@ formEl.addEventListener('submit', async (e) => {
       maxPearlTotalChf: Number(document.getElementById('f-pearl-max').value) || 1650,
       minRoomsPreferred: Number(document.getElementById('f-min-rooms').value) || 2,
       minSurfaceM2Preferred: Number(document.getElementById('f-min-surface').value) || 0,
-      allowStudioTransition: document.getElementById('f-studio').checked
+      allowStudioTransition: document.getElementById('f-studio').checked,
+      pearl: {
+        enabled: pearlEnabledEl.checked,
+        minRooms: Number(document.getElementById('f-pearl-min-rooms').value) || 2,
+        minSurfaceM2: Number(document.getElementById('f-pearl-min-surface').value) || 50,
+        keywords: document.getElementById('f-pearl-keywords').value.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+        minHits: Number(document.getElementById('f-pearl-min-hits').value) || 1
+      }
     },
     preferences: {
       workplaceAddress: document.getElementById('f-workplace').value.trim() || null
