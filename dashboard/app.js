@@ -547,7 +547,11 @@ function applyFilterAndSort(items) {
 
     if (sortBy === 'price') return (a.totalChf || 999999) - (b.totalChf || 999999);
     if (sortBy === 'area') return String(a.area || '').localeCompare(String(b.area || ''), 'fr-CH');
-    if (sortBy === 'date') return (new Date(b.publishedAt || 0).getTime()) - (new Date(a.publishedAt || 0).getTime());
+    if (sortBy === 'date') {
+      const aDays = publishedMeta(a).days ?? Infinity;
+      const bDays = publishedMeta(b).days ?? Infinity;
+      return aDays - bDays;
+    }
     return (b.score || 0) - (a.score || 0);
   });
 
