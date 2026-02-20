@@ -208,12 +208,23 @@
 }
 
 .profile-card .card-actions .btn.primary {
-  color: var(--primary);
+  color: #03261d;
+  background: linear-gradient(125deg, #1aa58b, #40c5a6 45%, #68d9ad);
 }
 
 .profile-card .card-actions .btn.primary:hover {
-  background: rgba(86, 212, 184, 0.12);
-  color: var(--primary-2);
+  background: linear-gradient(125deg, #17937d, #38b394 45%, #58c99d);
+  color: #03261d;
+}
+
+.profile-card .card-actions .btn.danger {
+  color: #1a0507;
+  background: var(--danger);
+}
+
+.profile-card .card-actions .btn.danger:hover {
+  background: #ff5f73;
+  color: #1a0507;
 }
 
 .profile-card .card-actions .btn + .btn {

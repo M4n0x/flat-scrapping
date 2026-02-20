@@ -363,7 +363,7 @@ function renderProfiles(profiles) {
       <div class="card-actions">
         <a href="${profileUrl}" class="btn primary">Ouvrir</a>
         <button type="button" class="btn edit-btn" data-slug="${escapeHtml(p.slug)}">Modifier</button>
-        <button type="button" class="btn delete-btn" data-slug="${escapeHtml(p.slug)}" data-name="${escapeHtml(p.label || p.slug)}">Supprimer</button>
+        <button type="button" class="btn danger delete-btn" data-slug="${escapeHtml(p.slug)}" data-name="${escapeHtml(p.label || p.slug)}">Supprimer</button>
       </div>
     `;
 
