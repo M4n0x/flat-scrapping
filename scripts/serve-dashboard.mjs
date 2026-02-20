@@ -412,6 +412,17 @@ const server = http.createServer(async (req, res) => {
       readJsonSafe(paths.latestPath, { all: [], matching: [], generatedAt: null, newCount: 0 })
     ]);
 
+    // Filter newListings to only today's entries to avoid stale counts
+    const today = new Date();
+    latest.newListings = (latest.newListings || []).filter((x) => {
+      if (!x.firstSeenAt) return false;
+      const d = new Date(x.firstSeenAt);
+      return d.getFullYear() === today.getFullYear()
+        && d.getMonth() === today.getMonth()
+        && d.getDate() === today.getDate();
+    });
+    latest.newCount = latest.newListings.length;
+
     return sendJson(res, 200, { profile, tracker, latest });
   }
 

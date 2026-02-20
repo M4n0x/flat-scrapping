@@ -1059,7 +1059,7 @@ function renderCards(listings, latest) {
     card('Perles ⭐', pearls, 'pearl'),
     card('Urgentes', urgent, 'urgent'),
     card('Priorité B', priorityB, 'transition'),
-    card('Nouvelles', news || latest.newCount || 0, 'new'),
+    card('Nouvelles', news, 'new'),
     card('Retirées', removed, 'removed')
   );
 }
