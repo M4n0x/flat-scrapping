@@ -217,15 +217,7 @@
   color: #03261d;
 }
 
-.profile-card .card-actions .btn.danger {
-  color: #1a0507;
-  background: var(--danger);
-}
 
-.profile-card .card-actions .btn.danger:hover {
-  background: #ff5f73;
-  color: #1a0507;
-}
 
 .profile-card .card-actions .btn + .btn {
   border-left: 1px solid var(--line);
