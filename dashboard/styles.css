@@ -889,12 +889,12 @@ a:hover {
 /* --- Pin button --- */
 
 .pin-btn {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
   padding: 0;
   border: 1px solid rgba(148, 198, 198, 0.32);
-  border-radius: 10px;
+  border-radius: 9px;
   background: rgba(12, 35, 45, 0.56);
   color: #8fb5b7;
   cursor: pointer;
@@ -905,7 +905,7 @@ a:hover {
 }
 
 .pin-btn .pin-icon {
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1;
   opacity: 0.95;
 }
@@ -965,16 +965,16 @@ a:hover {
 
 .action-cell {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   align-items: stretch;
   height: 100%;
-  min-height: 40px;
+  min-height: 34px;
 }
 
 .action-cell .pin-btn {
   align-self: stretch;
   height: auto;
-  min-height: 34px;
+  min-height: 30px;
 }
 
 .action-cell .save-inline {
@@ -985,11 +985,12 @@ a:hover {
 
 .save-inline {
   width: 100%;
-  border-radius: 10px;
+  border-radius: 9px;
   border: 1px solid rgba(111, 200, 181, 0.55);
   background: rgba(38, 118, 111, 0.22);
   color: #b9ffef;
-  padding: 8px;
+  padding: 6px 8px;
+  font-size: 0.82rem;
   font-weight: 650;
   cursor: pointer;
 }
