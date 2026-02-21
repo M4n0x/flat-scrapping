@@ -30,11 +30,7 @@ const PROFILE_TITLES = {
   'saint-maurice': 'Saint-Maurice (VS)'
 };
 
-const PROFILE_ZONES = {
-  vevey: 'Zones: Vevey · La Tour-de-Peilz · Corseaux · Corsier-sur-Vevey',
-  fribourg: 'Zones: Châtel-Saint-Denis · Romont FR',
-  'saint-maurice': 'Zone: Saint-Maurice (Valais)'
-};
+let profileAreasText = '';
 
 async function loadProfileSwitcher() {
   try {
@@ -55,7 +51,8 @@ async function loadProfileSwitcher() {
     const current = profiles.find((p) => p.slug === PROFILE);
     if (current) {
       if (heroTitleEl) heroTitleEl.textContent = PROFILE_TITLES[PROFILE] || current.name;
-      if (zonesEl) zonesEl.textContent = current.areas ? `Zones: ${current.areas}` : '';
+      profileAreasText = current.areas ? `Zones: ${current.areas}` : '';
+      if (zonesEl) zonesEl.textContent = profileAreasText;
     }
 
     // Add "manage" option at the end
@@ -90,7 +87,7 @@ if (heroTitleEl) {
   heroTitleEl.textContent = PROFILE_TITLES[PROFILE] || `Suivi ${PROFILE}`;
 }
 if (zonesEl) {
-  zonesEl.textContent = PROFILE_ZONES[PROFILE] || '';
+  zonesEl.textContent = profileAreasText;
 }
 if (subEl) {
   subEl.textContent = `Profil: ${PROFILE} · chargement…`;
@@ -1142,7 +1139,7 @@ function renderAll(latest) {
 
 async function load() {
   const res = await fetch(apiUrl('/api/state'));
-  const { tracker, latest, profile } = await res.json();
+  const { tracker, latest, profile, areas } = await res.json();
 
   statuses = tracker.statuses || [];
   allListings = (tracker.listings || []).filter((x) => x.display !== false);
@@ -1155,8 +1152,11 @@ async function load() {
   if (heroTitleEl) {
     heroTitleEl.textContent = PROFILE_TITLES[effectiveProfile] || `Suivi ${effectiveProfile}`;
   }
+  if (typeof areas === 'string' && areas.trim()) {
+    profileAreasText = `Zones: ${areas}`;
+  }
   if (zonesEl) {
-    zonesEl.textContent = PROFILE_ZONES[effectiveProfile] || '';
+    zonesEl.textContent = profileAreasText;
   }
 
   subEl.textContent = `Profil: ${effectiveProfile} · Dernier scan: ${shortWhen(latest.generatedAt)} · ${activeCount} actives · ${removedCount} retirées`;

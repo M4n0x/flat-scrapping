@@ -437,9 +437,10 @@ const server = http.createServer(async (req, res) => {
     const profile = getProfileFromRequest(u);
     const paths = await ensureProfileStorage(profile);
 
-    const [tracker, latest] = await Promise.all([
+    const [tracker, latest, config] = await Promise.all([
       readJsonSafe(paths.trackerPath, { listings: [], statuses: [] }),
-      readJsonSafe(paths.latestPath, { all: [], matching: [], generatedAt: null, newCount: 0 })
+      readJsonSafe(paths.latestPath, { all: [], matching: [], generatedAt: null, newCount: 0 }),
+      readJsonSafe(paths.configPath, { areas: [] })
     ]);
 
     // Filter newListings to only today's entries to avoid stale counts
@@ -453,7 +454,9 @@ const server = http.createServer(async (req, res) => {
     });
     latest.newCount = latest.newListings.length;
 
-    return sendJson(res, 200, { profile, tracker, latest });
+    const areas = (config?.areas || []).map((a) => a?.label).filter(Boolean).join(' · ');
+
+    return sendJson(res, 200, { profile, tracker, latest, areas });
   }
 
   if (req.method === 'POST' && u.pathname === '/api/update-status') {
