@@ -1262,8 +1262,28 @@ function normalizeKeyText(value = '') {
     .trim();
 }
 
+// Swiss canton abbreviations used as city suffixes (e.g. "Romont FR", "Sierre VS")
+const SWISS_CANTON_CODES = new Set([
+  'ag', 'ai', 'ar', 'be', 'bl', 'bs', 'fr', 'ge', 'gl', 'gr',
+  'ju', 'lu', 'ne', 'nw', 'ow', 'sg', 'sh', 'so', 'sz', 'tg',
+  'ti', 'ur', 'vd', 'vs', 'zg', 'zh'
+]);
+
 function normalizeAreaToken(value = '') {
-  return normalizeKeyText(value).replace(/\bde\b/g, ' ').replace(/\s+/g, ' ').trim();
+  let token = normalizeKeyText(value)
+    .replace(/\bsaint\b/g, 'st')   // Saint-Légier ↔ St-Légier
+    .replace(/\bde\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Strip trailing Swiss canton suffix (e.g. "romont fr" → "romont")
+  const parts = token.split(' ');
+  if (parts.length > 1 && SWISS_CANTON_CODES.has(parts[parts.length - 1])) {
+    parts.pop();
+    token = parts.join(' ');
+  }
+
+  return token;
 }
 
 function resolveNonSpeculativeGroups(config) {
