@@ -811,7 +811,8 @@ function renderDesktop(listings) {
     }
 
     const tdAction = document.createElement('td');
-    tdAction.className = 'action-cell';
+    const actionCell = document.createElement('div');
+    actionCell.className = 'action-cell';
 
     if (item.isRemoved) {
       const deleteBtn = document.createElement('button');
@@ -829,12 +830,14 @@ function renderDesktop(listings) {
           deleteBtn.textContent = 'Supprimer';
         }
       });
-      tdAction.appendChild(deleteBtn);
+      actionCell.appendChild(deleteBtn);
     } else {
       const pinBtn = createPinButton(item);
       const saveBtn = createSaveButton(() => updateStatus(item.id, select.value, notesInput.value));
-      tdAction.append(pinBtn, saveBtn);
+      actionCell.append(pinBtn, saveBtn);
     }
+
+    tdAction.appendChild(actionCell);
 
     if (item.pinned) tr.classList.add('row-pinned');
     tr.append(tdPriority, tdScore, tdImage, tdInfo, tdPrice, tdPublished, tdDistance, tdStatus, tdNotes, tdAction);

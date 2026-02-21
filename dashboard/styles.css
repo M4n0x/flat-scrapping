@@ -943,11 +943,21 @@ a:hover {
   display: flex;
   gap: 6px;
   align-items: stretch;
+  height: 100%;
+  min-height: 40px;
+}
+
+.action-cell .pin-btn {
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .action-cell .save-inline {
   flex: 1;
   width: auto;
+  align-self: stretch;
 }
 
 .save-inline {
