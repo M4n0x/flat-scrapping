@@ -197,6 +197,22 @@ function inferAreaFromAddress(address = '', fallback = '') {
   return fallback;
 }
 
+function inferAreaFromAddressStrict(address = '') {
+  const parts = String(address || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (!parts.length) return '';
+
+  const first = parts[0];
+  if (!/\d/.test(first)) return first;
+
+  const withZip = parts.find((p) => /\b\d{4}\b/.test(p));
+  if (withZip) {
+    const m = withZip.match(/\b\d{4}\s+(.+)$/);
+    if (m?.[1]) return m[1].trim();
+  }
+
+  return '';
+}
+
 function parsePrice(raw = '') {
   const text = stripTags(raw);
   const rentMatch = text.match(/CHF\s*([\d'\s]+)\.?-?\/?mois/i);
@@ -1353,6 +1369,129 @@ function resolveImmobilierCanton(area = {}, config = {}) {
   return 'vaud';
 }
 
+const IMMOBILIER_SLUG_LEADING_ARTICLES = new Set(['la', 'le', 'les', 'l']);
+const IMMOBILIER_SLUG_JOINERS = new Set(['de', 'du', 'des', 'd']);
+
+function normalizeSlugCandidate(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function slugSaintToSt(value = '') {
+  return String(value || '').replace(/(^|-)saint(?=-|$)/g, '$1st');
+}
+
+function slugStToSaint(value = '') {
+  return String(value || '').replace(/(^|-)st(?=-|$)/g, '$1saint');
+}
+
+function compactImmobilierSlug(value = '') {
+  const tokens = String(value || '').split('-').filter(Boolean);
+  if (!tokens.length) return '';
+
+  while (tokens.length && IMMOBILIER_SLUG_LEADING_ARTICLES.has(tokens[0])) {
+    tokens.shift();
+  }
+
+  const out = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (!token) continue;
+
+    if (IMMOBILIER_SLUG_JOINERS.has(token)) continue;
+    if (token === 'la' && i > 0 && (tokens[i - 1] === 'st' || tokens[i - 1] === 'saint')) continue;
+
+    out.push(token);
+  }
+
+  return out.join('-');
+}
+
+function buildImmobilierSlugCandidates(area = {}) {
+  const ordered = [];
+  const seen = new Set();
+
+  const add = (value) => {
+    const key = normalizeSlugCandidate(value);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    ordered.push(key);
+  };
+
+  add(area?.slug || '');
+  add(area?.label || '');
+
+  for (let i = 0; i < ordered.length; i += 1) {
+    const slug = ordered[i];
+    add(slugSaintToSt(slug));
+    add(slugStToSaint(slug));
+
+    const compact = compactImmobilierSlug(slug);
+    add(compact);
+    add(slugSaintToSt(compact));
+    add(slugStToSaint(compact));
+  }
+
+  return ordered;
+}
+
+async function resolveImmobilierSlugForArea(area = {}, config = {}) {
+  const canton = resolveImmobilierCanton(area, config);
+  const candidates = buildImmobilierSlugCandidates(area);
+  const fallback = normalizeSlugCandidate(area?.slug || area?.label || '');
+  if (!candidates.length) return fallback;
+
+  const areaTargetSet = buildTargetAreaSet([area]);
+  let best = null;
+
+  for (let idx = 0; idx < candidates.length; idx += 1) {
+    const slug = candidates[idx];
+    const url = `https://www.immobilier.ch/fr/louer/appartement/${canton}/${slug}/page-1`;
+
+    try {
+      const html = await fetchHtml(url);
+      const items = parseListingsFromHtml(html, area?.label || '');
+      if (!items.length) continue;
+
+      let strictMatches = 0;
+      let looseMatches = 0;
+
+      for (const item of items) {
+        const strictArea = inferAreaFromAddressStrict(item.address || '');
+        if (strictArea && isTargetAreaCity(strictArea, areaTargetSet)) {
+          strictMatches += 1;
+        }
+        if (isTargetAreaCity(item.area || '', areaTargetSet)) {
+          looseMatches += 1;
+        }
+      }
+
+      const score = strictMatches * 100 + looseMatches;
+      if (!best || score > best.score) {
+        best = { slug, score, strictMatches, looseMatches };
+      }
+
+      // Fast path: current slug already returns matching city names.
+      if (idx === 0 && strictMatches > 0) {
+        return slug;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+
+  if (best && (best.strictMatches > 0 || best.looseMatches > 0)) {
+    return best.slug;
+  }
+
+  return candidates[0] || fallback;
+}
+
 function resolveFlatfoxAreaTokens(areas = []) {
   const tokens = new Set();
 
@@ -2050,12 +2189,20 @@ async function main() {
   const scraped = [];
 
   for (const area of config.areas || []) {
+    const canton = resolveImmobilierCanton(area, config);
+    const areaLabel = String(area?.label || '').trim();
+    const configuredSlug = normalizeSlugCandidate(area?.slug || '');
+    const immobilierSlug = await resolveImmobilierSlugForArea(area, config);
+
+    if (immobilierSlug && configuredSlug && immobilierSlug !== configuredSlug) {
+      console.log(`INFO immobilier slug auto-resolved for "${areaLabel}": ${configuredSlug} -> ${immobilierSlug}`);
+    }
+
     for (let page = 1; page <= (config.pagesPerArea || 1); page++) {
-      const canton = resolveImmobilierCanton(area, config);
-      const url = `https://www.immobilier.ch/fr/louer/appartement/${canton}/${area.slug}/page-${page}`;
+      const url = `https://www.immobilier.ch/fr/louer/appartement/${canton}/${immobilierSlug || configuredSlug}/page-${page}`;
       try {
         const html = await fetchHtml(url);
-        const items = parseListingsFromHtml(html, area.label);
+        const items = parseListingsFromHtml(html, areaLabel);
         for (const item of items) {
           if (!isTargetAreaCity(item.area || '', targetAreaSet)) continue;
           scraped.push(item);
