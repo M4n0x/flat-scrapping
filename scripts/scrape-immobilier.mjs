@@ -2162,10 +2162,13 @@ async function main() {
       maxPublishedAgeDays: Number(config.filters?.maxPublishedAgeDays ?? 20)
     };
 
+    const existingWorkAddress = config.preferences?.workplaceAddress || config.preferences?.workAddress;
     config.preferences = {
-      ...(config.preferences || {}),
-      workplaceAddress: 'Gare de Saint-Maurice, 1890 Saint-Maurice, Suisse'
+      ...(config.preferences || {})
     };
+    if (!existingWorkAddress) {
+      config.preferences.workplaceAddress = 'Gare de Saint-Maurice, 1890 Saint-Maurice, Suisse';
+    }
     delete config.preferences.transportToLausanne;
   }
 
