@@ -286,7 +286,9 @@ function createPinButton(item) {
 }
 
 function getImageUrls(item) {
+  if (Array.isArray(item.imageUrlsLocal) && item.imageUrlsLocal.length) return item.imageUrlsLocal;
   if (Array.isArray(item.imageUrls) && item.imageUrls.length) return item.imageUrls;
+  if (Array.isArray(item.imageUrlsRemote) && item.imageUrlsRemote.length) return item.imageUrlsRemote;
   if (item.imageUrl) return [item.imageUrl];
   return [];
 }

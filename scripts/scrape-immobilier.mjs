@@ -149,32 +149,84 @@ function toLocalImageWebPath(filePath = '') {
   return `/data/${rel}`;
 }
 
-async function localizeVisibleListingImages(listings = []) {
+function uniqueStrings(values = []) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of values) {
+    const value = String(raw || '').trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+  }
+  return out;
+}
+
+function localImageUrlsFromItem(item = {}) {
+  return uniqueStrings([
+    ...(Array.isArray(item?.imageUrlsLocal) ? item.imageUrlsLocal : []),
+    ...((Array.isArray(item?.imageUrls) ? item.imageUrls : []).filter((x) => !isHttpUrl(x))),
+    ...(!isHttpUrl(item?.imageUrl) && item?.imageUrl ? [item.imageUrl] : [])
+  ]);
+}
+
+function remoteImageUrlsFromItem(item = {}) {
+  const explicit = uniqueStrings(Array.isArray(item?.imageUrlsRemote) ? item.imageUrlsRemote : []);
+  if (explicit.length) return explicit.filter((x) => isHttpUrl(x));
+
+  return uniqueStrings([
+    ...((Array.isArray(item?.imageUrls) ? item.imageUrls : []).filter((x) => isHttpUrl(x))),
+    ...(isHttpUrl(item?.imageUrl) ? [item.imageUrl] : [])
+  ]);
+}
+
+function applyListingImageFields(item = {}, { localUrls = [], remoteUrls = [] } = {}) {
+  const local = uniqueStrings(localUrls);
+  const remote = uniqueStrings(remoteUrls.filter((x) => isHttpUrl(x)));
+  const display = local.length ? local : remote;
+
+  item.imageUrlsLocal = local;
+  item.imageUrlsRemote = remote;
+  item.imageUrls = display;
+  item.imageUrl = display[0] || null;
+}
+
+function normalizeListingImageFields(listings = []) {
+  if (!Array.isArray(listings)) return;
+  for (const item of listings) {
+    applyListingImageFields(item, {
+      localUrls: localImageUrlsFromItem(item),
+      remoteUrls: remoteImageUrlsFromItem(item)
+    });
+  }
+}
+
+function resolveMaxArchivedImagesPerListing(config = {}) {
+  const value = Number(config?.media?.maxArchivedImagesPerListing ?? 5);
+  if (!Number.isFinite(value)) return 5;
+  return Math.max(1, Math.min(12, Math.trunc(value)));
+}
+
+async function localizeVisibleListingImages(listings = [], config = {}) {
   if (!Array.isArray(listings) || !listings.length) return;
 
   const imagesDir = path.join(DATA_DIR, 'images');
   await fs.mkdir(imagesDir, { recursive: true });
 
   const urlToLocal = new Map();
+  const maxPerListing = resolveMaxArchivedImagesPerListing(config);
 
   for (const item of listings) {
-    const originalUrls = Array.isArray(item?.imageUrls) && item.imageUrls.length
-      ? item.imageUrls
-      : (item?.imageUrl ? [item.imageUrl] : []);
+    const preservedLocal = localImageUrlsFromItem(item);
+    const remoteUrls = remoteImageUrlsFromItem(item).slice(0, maxPerListing);
 
-    if (!originalUrls.length) continue;
+    if (!remoteUrls.length) {
+      applyListingImageFields(item, { localUrls: preservedLocal, remoteUrls: [] });
+      continue;
+    }
 
     const localized = [];
 
-    for (const rawUrl of originalUrls) {
-      const sourceUrl = String(rawUrl || '').trim();
-      if (!sourceUrl) continue;
-
-      if (!isHttpUrl(sourceUrl)) {
-        localized.push(sourceUrl);
-        continue;
-      }
-
+    for (const sourceUrl of remoteUrls) {
       if (urlToLocal.has(sourceUrl)) {
         localized.push(urlToLocal.get(sourceUrl));
         continue;
@@ -201,15 +253,14 @@ async function localizeVisibleListingImages(listings = []) {
         urlToLocal.set(sourceUrl, localPath);
         localized.push(localPath);
       } catch {
-        localized.push(sourceUrl);
+        // Keep the remote URL as fallback if archiving fails.
       }
     }
 
-    const dedup = [...new Set(localized.filter(Boolean))];
-    if (dedup.length) {
-      item.imageUrls = dedup;
-      item.imageUrl = dedup[0];
-    }
+    applyListingImageFields(item, {
+      localUrls: [...preservedLocal, ...localized].slice(0, maxPerListing),
+      remoteUrls
+    });
   }
 }
 
@@ -2664,11 +2715,14 @@ async function main() {
     return (a.totalChf || 999999) - (b.totalChf || 999999);
   });
 
+  normalizeListingImageFields(merged);
+
   const visibleActive = merged.filter((x) => x.active && x.display !== false);
   const visibleRemoved = merged.filter((x) => !x.active && x.display !== false && x.isRemoved);
   const visibleAll = merged.filter((x) => x.display !== false);
 
-  await localizeVisibleListingImages(visibleAll);
+  // Archive images only while flats are still visible/active.
+  await localizeVisibleListingImages(visibleActive, config);
 
   const matching = visibleActive;
   const newListings = matching.filter((x) => x.isNew || !prevIds.has(String(x.id)));
