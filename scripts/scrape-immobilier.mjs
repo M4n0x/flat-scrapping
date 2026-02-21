@@ -2634,13 +2634,58 @@ async function main() {
         continue;
       }
 
+      const minBudget = Number(config.filters?.minTotalChf ?? 0);
+      const hardBudget = config.filters?.maxTotalHardChf ?? 1450;
+
+      const publicationMeta = publicationEligibility(old, config);
+      const locationMeta = locationEligibility(old, config);
+      const nonSpecMeta = nonSpeculativeEligibility(old, config);
+
+      const refreshed = {
+        excludedType: isExcludedType(old, config),
+        sizeEligible: isSizeEligible(old, config),
+        isPearl: isPearl(old, config),
+        withinHardBudget: old.totalChf != null ? old.totalChf <= hardBudget : false,
+        aboveMinBudget: minBudget <= 0 || (old.totalChf != null && old.totalChf >= minBudget),
+        publishedAgeDays: publicationMeta.ageDays,
+        maxPublishedAgeDays: publicationMeta.maxAgeDays,
+        publicationEligible: publicationMeta.eligible,
+        locationEligible: locationMeta.eligible,
+        locationFilterReason: locationMeta.reason,
+        nonSpeculativeEligible: nonSpecMeta.eligible,
+        nonSpeculativeFilterReason: nonSpecMeta.reason
+      };
+
+      refreshed.display = !refreshed.excludedType
+        && refreshed.sizeEligible
+        && refreshed.aboveMinBudget
+        && (refreshed.withinHardBudget || refreshed.isPearl)
+        && refreshed.publicationEligible
+        && refreshed.locationEligible
+        && refreshed.nonSpeculativeEligible;
+
+      refreshed.priority = refreshed.isPearl && !refreshed.withinHardBudget ? 'A★' : derivePriority(old, config);
+
+      if (!refreshed.display) {
+        if (refreshed.excludedType) refreshed.filterReason = 'Type exclu (chambre/colocation)';
+        else if (!refreshed.aboveMinBudget) refreshed.filterReason = `En dessous de CHF ${minBudget}`;
+        else if (!refreshed.sizeEligible) refreshed.filterReason = 'Taille non prioritaire';
+        else if (!refreshed.locationEligible) refreshed.filterReason = refreshed.locationFilterReason || 'Hors zones ciblées';
+        else if (!refreshed.nonSpeculativeEligible) refreshed.filterReason = refreshed.nonSpeculativeFilterReason || 'Bailleur hors liste non spéculative';
+        else if (!refreshed.publicationEligible) {
+          refreshed.filterReason = `Annonce trop ancienne (> ${refreshed.maxPublishedAgeDays} jours)`;
+        } else refreshed.filterReason = `Au-dessus de CHF ${hardBudget}`;
+      } else {
+        refreshed.filterReason = '';
+      }
+
       const oldDedupKey = buildCrossSourceDedupKey(old);
-      const duplicateOfActive = old.display !== false && oldDedupKey && activeDedupKeys.has(oldDedupKey);
+      const duplicateOfActive = refreshed.display !== false && oldDedupKey && activeDedupKeys.has(oldDedupKey);
       const excludedAnibisSale = isStoredAnibisSaleListing(old);
       const anibisSourceDisabled = String(old?.source || '') === 'anibis.ch' && config.sources?.anibis === false;
       const shouldRemove = duplicateOfActive || excludedAnibisSale || anibisSourceDisabled
         ? true
-        : (old.display === false ? false : nextMissing >= missingScansBeforeRemoved);
+        : (refreshed.display === false ? false : nextMissing >= missingScansBeforeRemoved);
 
       if (duplicateOfActive || excludedAnibisSale || anibisSourceDisabled) {
         merged.push({
@@ -2664,7 +2709,7 @@ async function main() {
       let driveMinutes = toDurationMinutesOrNull(old.driveMinutes);
       let transitMinutes = toDurationMinutesOrNull(old.transitMinutes);
 
-      if (old.display !== false && (!shouldRemove || driveMinutes == null || transitMinutes == null || distanceKm == null)) {
+      if (refreshed.display !== false && (!shouldRemove || driveMinutes == null || transitMinutes == null || distanceKm == null)) {
         const distanceMeta = await computeDistanceFromWork(old, workCoords, geocodeCache);
 
         if (distanceMeta.computed) {
@@ -2683,6 +2728,7 @@ async function main() {
 
       merged.push({
         ...old,
+        ...refreshed,
         distanceKm,
         distanceText,
         driveMinutes,
