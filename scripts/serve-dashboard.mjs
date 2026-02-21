@@ -23,6 +23,9 @@ const MIME = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.avif': 'image/avif',
   '.svg': 'image/svg+xml'
 };
 
@@ -180,6 +183,33 @@ async function updateStatus(profile, id, status, notes) {
   tracker.updatedAt = new Date().toISOString();
   await fs.writeFile(paths.trackerPath, JSON.stringify(tracker, null, 2));
   return true;
+}
+
+async function togglePin(profile, id) {
+  const paths = await ensureProfileStorage(profile);
+  const tracker = await readJsonSafe(paths.trackerPath, null);
+  if (!tracker || !Array.isArray(tracker.listings)) return null;
+
+  const item = tracker.listings.find((x) => String(x.id) === String(id));
+  if (!item) return null;
+
+  item.pinned = !item.pinned;
+  item.updatedAt = new Date().toISOString();
+  tracker.updatedAt = new Date().toISOString();
+  await fs.writeFile(paths.trackerPath, JSON.stringify(tracker, null, 2));
+
+  // Also update latest-listings.json so the dashboard reflects the change immediately
+  const latest = await readJsonSafe(paths.latestPath, null);
+  if (latest) {
+    for (const arr of [latest.all, latest.matching, latest.newListings]) {
+      if (!Array.isArray(arr)) continue;
+      const found = arr.find((x) => String(x.id) === String(id));
+      if (found) found.pinned = item.pinned;
+    }
+    await fs.writeFile(paths.latestPath, JSON.stringify(latest, null, 2));
+  }
+
+  return item.pinned;
 }
 
 async function deleteListing(profile, id) {
@@ -485,6 +515,20 @@ const server = http.createServer(async (req, res) => {
     const job = scanAllJobs.get(jobId);
     if (!job) return sendJson(res, 404, { ok: false, error: 'Job not found' });
     return sendJson(res, 200, { ok: true, ...job });
+  }
+
+  if (req.method === 'POST' && u.pathname === '/api/toggle-pin') {
+    const profile = getProfileFromRequest(u);
+
+    try {
+      const raw = await readBody(req);
+      const body = JSON.parse(raw || '{}');
+      const pinned = await togglePin(profile, body.id);
+      if (pinned === null) return sendJson(res, 404, { ok: false });
+      return sendJson(res, 200, { ok: true, pinned });
+    } catch (err) {
+      return sendJson(res, 400, { ok: false, error: err.message });
+    }
   }
 
   if (req.method === 'POST' && u.pathname === '/api/delete-listing') {

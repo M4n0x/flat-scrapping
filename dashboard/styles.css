@@ -876,6 +876,51 @@ a:hover {
   gap: 7px;
 }
 
+/* --- Pin button --- */
+
+.pin-btn {
+  background: none;
+  border: 1px solid rgba(148, 198, 198, 0.25);
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  opacity: 0.4;
+  transition: opacity 0.15s, transform 0.15s, background 0.15s;
+}
+
+.pin-btn:hover {
+  opacity: 0.8;
+  background: rgba(148, 198, 198, 0.1);
+}
+
+.pin-btn.pinned {
+  opacity: 1;
+  background: rgba(255, 193, 7, 0.15);
+  border-color: rgba(255, 193, 7, 0.5);
+  transform: rotate(-20deg);
+}
+
+.row-pinned {
+  background: rgba(255, 193, 7, 0.06) !important;
+  border-left: 3px solid rgba(255, 193, 7, 0.5);
+}
+
+.k-card.pinned {
+  border-color: rgba(255, 193, 7, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.2);
+}
+
+.mobile-card.row-pinned {
+  border-left: 3px solid rgba(255, 193, 7, 0.5);
+}
+
+.action-cell {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .save-inline {
   width: 100%;
   border-radius: 10px;

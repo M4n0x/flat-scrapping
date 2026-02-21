@@ -242,6 +242,20 @@ async function updateStatus(id, status, notes) {
   return !!data.ok;
 }
 
+async function togglePin(id) {
+  const res = await fetch(apiUrl('/api/toggle-pin'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id })
+  });
+  const data = await res.json();
+  if (data.ok) {
+    const item = allListings.find((x) => String(x.id) === String(id));
+    if (item) item.pinned = data.pinned;
+  }
+  return data.ok ? data.pinned : null;
+}
+
 async function deleteListing(id) {
   const res = await fetch(apiUrl('/api/delete-listing'), {
     method: 'POST',
@@ -250,6 +264,25 @@ async function deleteListing(id) {
   });
   const data = await res.json();
   return !!data.ok;
+}
+
+function createPinButton(item) {
+  const btn = document.createElement('button');
+  btn.className = `pin-btn${item.pinned ? ' pinned' : ''}`;
+  btn.title = item.pinned ? 'Désépingler' : 'Épingler en haut';
+  btn.textContent = '📌';
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    btn.disabled = true;
+    const pinned = await togglePin(item.id);
+    if (pinned !== null) {
+      item.pinned = pinned;
+      renderAll(latestState);
+    } else {
+      btn.disabled = false;
+    }
+  });
+  return btn;
 }
 
 function getImageUrls(item) {
@@ -541,6 +574,11 @@ function applyFilterAndSort(items) {
   }
 
   out.sort((a, b) => {
+    // Pinned items always first
+    const aPin = a.pinned ? 1 : 0;
+    const bPin = b.pinned ? 1 : 0;
+    if (aPin !== bPin) return bPin - aPin;
+
     const aGrey = (a.isRemoved || isRefused(a)) ? 1 : 0;
     const bGrey = (b.isRemoved || isRefused(b)) ? 1 : 0;
     if (aGrey !== bGrey) return aGrey - bGrey;
@@ -773,6 +811,7 @@ function renderDesktop(listings) {
     }
 
     const tdAction = document.createElement('td');
+    tdAction.className = 'action-cell';
 
     if (item.isRemoved) {
       const deleteBtn = document.createElement('button');
@@ -792,10 +831,12 @@ function renderDesktop(listings) {
       });
       tdAction.appendChild(deleteBtn);
     } else {
+      const pinBtn = createPinButton(item);
       const saveBtn = createSaveButton(() => updateStatus(item.id, select.value, notesInput.value));
-      tdAction.appendChild(saveBtn);
+      tdAction.append(pinBtn, saveBtn);
     }
 
+    if (item.pinned) tr.classList.add('row-pinned');
     tr.append(tdPriority, tdScore, tdImage, tdInfo, tdPrice, tdPublished, tdDistance, tdStatus, tdNotes, tdAction);
     rowsEl.appendChild(tr);
   }
@@ -848,6 +889,7 @@ function renderKanban(listings) {
       if (item.isRemoved) kCard.classList.add('removed');
       if (isRefused(item)) kCard.classList.add('refused');
       if (isNewToday(item) && !item.isRemoved) kCard.classList.add('new');
+      if (item.pinned) kCard.classList.add('pinned');
 
       if (!item.isRemoved) {
         kCard.draggable = true;
@@ -909,6 +951,9 @@ function renderKanban(listings) {
       actions.addEventListener('dragstart', (event) => event.preventDefault());
 
       if (!item.isRemoved) {
+        const pinBtn = createPinButton(item);
+        pinBtn.draggable = false;
+
         const select = createStatusSelect(item);
         select.draggable = false;
 
@@ -918,7 +963,7 @@ function renderKanban(listings) {
           await load();
         });
 
-        actions.append(select);
+        actions.append(pinBtn, select);
       } else {
         const retired = document.createElement('div');
         retired.className = 'k-retired-note';
@@ -1007,6 +1052,7 @@ function renderMobile(listings) {
     controls.className = 'mobile-controls';
 
     if (!item.isRemoved) {
+      const pinBtn = createPinButton(item);
       const select = createStatusSelect(item);
       const notesInput = document.createElement('input');
       notesInput.value = item.notes || '';
@@ -1019,7 +1065,7 @@ function renderMobile(listings) {
       });
 
       const saveBtn = createSaveButton(() => updateStatus(item.id, select.value, notesInput.value));
-      controls.append(select, notesInput, saveBtn);
+      controls.append(pinBtn, select, notesInput, saveBtn);
     } else {
       const retired = document.createElement('div');
       retired.className = 'k-retired-note';
@@ -1044,6 +1090,7 @@ function renderMobile(listings) {
       controls.append(retired, del);
     }
 
+    if (item.pinned) card.classList.add('row-pinned');
     card.querySelector('.mobile-content').appendChild(controls);
     mobileRowsEl.appendChild(card);
   }

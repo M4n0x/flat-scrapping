@@ -72,6 +72,16 @@ const HOMEGATE_SECRET = process.env.HOMEGATE_SECRET
   ? Buffer.from(process.env.HOMEGATE_SECRET)
   : Buffer.alloc(0);
 
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif'];
+const IMAGE_EXT_BY_CONTENT_TYPE = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/avif': '.avif'
+};
+
 function decodeHtml(input = '') {
   return input
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
@@ -87,6 +97,120 @@ function decodeHtml(input = '') {
 
 function stripTags(html = '') {
   return decodeHtml(html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
+}
+
+function isHttpUrl(value = '') {
+  return /^https?:\/\//i.test(String(value || '').trim());
+}
+
+function imageExtFromUrl(value = '') {
+  try {
+    const pathname = new URL(String(value || '')).pathname;
+    const ext = path.extname(pathname).toLowerCase();
+    return IMAGE_EXTENSIONS.includes(ext) ? ext : '';
+  } catch {
+    return '';
+  }
+}
+
+function imageExtFromContentType(value = '') {
+  const raw = String(value || '').toLowerCase().split(';')[0].trim();
+  return IMAGE_EXT_BY_CONTENT_TYPE[raw] || '';
+}
+
+async function fetchBinary(url) {
+  const res = await fetch(url, {
+    headers: {
+      'user-agent':
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      accept: 'image/*,*/*;q=0.8'
+    }
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} on ${url}`);
+  }
+
+  const buf = Buffer.from(await res.arrayBuffer());
+  const contentType = res.headers.get('content-type') || '';
+  return { buffer: buf, contentType };
+}
+
+async function findExistingImageFile(baseNoExt = '') {
+  for (const ext of IMAGE_EXTENSIONS) {
+    const candidate = `${baseNoExt}${ext}`;
+    if (await fileExists(candidate)) return candidate;
+  }
+  return null;
+}
+
+function toLocalImageWebPath(filePath = '') {
+  const rel = path.relative(LEGACY_DATA_DIR, filePath).split(path.sep).join('/');
+  return `/data/${rel}`;
+}
+
+async function localizeVisibleListingImages(listings = []) {
+  if (!Array.isArray(listings) || !listings.length) return;
+
+  const imagesDir = path.join(DATA_DIR, 'images');
+  await fs.mkdir(imagesDir, { recursive: true });
+
+  const urlToLocal = new Map();
+
+  for (const item of listings) {
+    const originalUrls = Array.isArray(item?.imageUrls) && item.imageUrls.length
+      ? item.imageUrls
+      : (item?.imageUrl ? [item.imageUrl] : []);
+
+    if (!originalUrls.length) continue;
+
+    const localized = [];
+
+    for (const rawUrl of originalUrls) {
+      const sourceUrl = String(rawUrl || '').trim();
+      if (!sourceUrl) continue;
+
+      if (!isHttpUrl(sourceUrl)) {
+        localized.push(sourceUrl);
+        continue;
+      }
+
+      if (urlToLocal.has(sourceUrl)) {
+        localized.push(urlToLocal.get(sourceUrl));
+        continue;
+      }
+
+      const hash = crypto.createHash('sha1').update(sourceUrl).digest('hex').slice(0, 24);
+      const baseNoExt = path.join(imagesDir, hash);
+
+      try {
+        const existing = await findExistingImageFile(baseNoExt);
+        if (existing) {
+          const localPath = toLocalImageWebPath(existing);
+          urlToLocal.set(sourceUrl, localPath);
+          localized.push(localPath);
+          continue;
+        }
+
+        const { buffer, contentType } = await fetchBinary(sourceUrl);
+        const ext = imageExtFromUrl(sourceUrl) || imageExtFromContentType(contentType) || '.jpg';
+        const filePath = `${baseNoExt}${ext}`;
+        await fs.writeFile(filePath, buffer);
+
+        const localPath = toLocalImageWebPath(filePath);
+        urlToLocal.set(sourceUrl, localPath);
+        localized.push(localPath);
+      } catch {
+        localized.push(sourceUrl);
+      }
+    }
+
+    const dedup = [...new Set(localized.filter(Boolean))];
+    if (dedup.length) {
+      item.imageUrls = dedup;
+      item.imageUrl = dedup[0];
+    }
+  }
 }
 
 function chfToNumber(str = '') {
@@ -2396,6 +2520,7 @@ async function main() {
       merged.push({
         ...existing,
         ...item,
+        pinned: !!existing.pinned,
         entryDateText,
         distanceKm,
         distanceText,
@@ -2542,6 +2667,8 @@ async function main() {
   const visibleActive = merged.filter((x) => x.active && x.display !== false);
   const visibleRemoved = merged.filter((x) => !x.active && x.display !== false && x.isRemoved);
   const visibleAll = merged.filter((x) => x.display !== false);
+
+  await localizeVisibleListingImages(visibleAll);
 
   const matching = visibleActive;
   const newListings = matching.filter((x) => x.isNew || !prevIds.has(String(x.id)));
