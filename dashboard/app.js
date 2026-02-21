@@ -1064,8 +1064,12 @@ function renderMobile(listings) {
         await load();
       });
 
+      const pinRow = document.createElement('div');
+      pinRow.className = 'mobile-pin-row';
+      pinRow.append(pinBtn, select);
+
       const saveBtn = createSaveButton(() => updateStatus(item.id, select.value, notesInput.value));
-      controls.append(pinBtn, select, notesInput, saveBtn);
+      controls.append(pinRow, notesInput, saveBtn);
     } else {
       const retired = document.createElement('div');
       retired.className = 'k-retired-note';
