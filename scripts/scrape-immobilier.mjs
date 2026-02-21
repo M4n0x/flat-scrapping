@@ -2135,7 +2135,7 @@ function makeSummary(latest) {
   lines.push(`Annonces retirées (conservées en grisé): ${latest.removedCount || 0}`);
   lines.push(`Annonces pertinentes (budget/critères): ${latest.matchingCount}`);
   if (!top.length) {
-    lines.push('Aucune nouvelle annonce pertinente cette nuit.');
+    lines.push('Aucune nouvelle annonce pertinente au dernier scan.');
   } else {
     lines.push('Top annonces:');
     for (const x of top) {
