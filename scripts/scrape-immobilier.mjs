@@ -1662,7 +1662,8 @@ async function scrapeHomegateListings(config, geocodeCache = {}) {
     const areaLabel = String(area?.label || '').trim();
     if (!areaLabel) continue;
 
-    const location = await geocodeAddress(`${areaLabel}, Vaud, Suisse`, geocodeCache);
+    const cantonLabel = String(area?.canton || 'Vaud').trim();
+    const location = await geocodeAddress(`${areaLabel}, ${cantonLabel}, Suisse`, geocodeCache);
     if (!location || typeof location !== 'object') continue;
 
     for (let page = 0; page < maxPagesPerArea; page += 1) {
