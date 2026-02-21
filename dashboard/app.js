@@ -274,7 +274,7 @@ function createPinButton(item) {
   const label = item.pinned ? 'Désépingler' : 'Épingler en haut';
   btn.title = label;
   btn.setAttribute('aria-label', label);
-  btn.innerHTML = '<svg class="pin-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v3l2 3h-4v8l-1-1-1 1V9H7l2-3z"/></svg>';
+  btn.innerHTML = '<i class="fa-solid fa-thumbtack pin-icon" aria-hidden="true"></i>';
 
   btn.addEventListener('click', async (e) => {
     e.stopPropagation();

@@ -905,10 +905,8 @@ a:hover {
 }
 
 .pin-btn .pin-icon {
-  width: 15px;
-  height: 15px;
-  display: block;
-  fill: currentColor;
+  font-size: 14px;
+  line-height: 1;
   opacity: 0.95;
 }
 
