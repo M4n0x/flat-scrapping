@@ -181,6 +181,12 @@ function slugToTitle(href = '') {
     .trim();
 }
 
+function extractAreaAfterSwissZip(value = '') {
+  const m = String(value || '').match(/\b\d{4}\s+(.+)$/);
+  if (!m?.[1]) return '';
+  return String(m[1]).split(',')[0].trim();
+}
+
 function inferAreaFromAddress(address = '', fallback = '') {
   const parts = String(address || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (!parts.length) return fallback;
@@ -190,8 +196,8 @@ function inferAreaFromAddress(address = '', fallback = '') {
 
   const withZip = parts.find((p) => /\b\d{4}\b/.test(p));
   if (withZip) {
-    const m = withZip.match(/\b\d{4}\s+(.+)$/);
-    if (m?.[1]) return m[1].trim();
+    const city = extractAreaAfterSwissZip(withZip);
+    if (city) return city;
   }
 
   return fallback;
@@ -206,8 +212,8 @@ function inferAreaFromAddressStrict(address = '') {
 
   const withZip = parts.find((p) => /\b\d{4}\b/.test(p));
   if (withZip) {
-    const m = withZip.match(/\b\d{4}\s+(.+)$/);
-    if (m?.[1]) return m[1].trim();
+    const city = extractAreaAfterSwissZip(withZip);
+    if (city) return city;
   }
 
   return '';
@@ -1221,7 +1227,7 @@ function parseListingsFromHtml(html, areaLabel) {
 
     const id = idMatch[1];
     const href = decodeHtml(hrefMatch[1]);
-    if (/\bvendre\b/i.test(href)) continue;
+    if (/\/vendre\//i.test(href)) continue;
 
     const url = href.startsWith('http') ? href : `https://www.immobilier.ch${href}`;
     if (/\/vendre\//i.test(url)) continue;
@@ -2203,6 +2209,8 @@ async function main() {
       try {
         const html = await fetchHtml(url);
         const items = parseListingsFromHtml(html, areaLabel);
+
+        // debug disabled
         for (const item of items) {
           if (!isTargetAreaCity(item.area || '', targetAreaSet)) continue;
           scraped.push(item);
