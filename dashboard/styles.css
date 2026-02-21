@@ -942,7 +942,7 @@ a:hover {
 .action-cell {
   display: flex;
   gap: 6px;
-  align-items: center;
+  align-items: stretch;
 }
 
 .action-cell .save-inline {
