@@ -1104,8 +1104,17 @@ async function load() {
 
 refreshBtn.addEventListener('click', load);
 filterEl.addEventListener('change', () => renderAll(latestState));
-sortEl.addEventListener('change', () => renderAll(latestState));
+sortEl.addEventListener('change', () => {
+  localStorage.setItem('apartment-search-sort', sortEl.value);
+  renderAll(latestState);
+});
 searchEl.addEventListener('input', () => renderAll(latestState));
+
+// Restaurer le tri depuis localStorage au chargement
+const savedSort = localStorage.getItem('apartment-search-sort');
+if (savedSort && sortEl.querySelector(`option[value="${savedSort}"]`)) {
+  sortEl.value = savedSort;
+}
 
 scanBtn.addEventListener('click', async () => {
   scanBtn.disabled = true;
