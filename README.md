@@ -1,6 +1,6 @@
 # Apartment Search 🏠
 
-Local dashboard for tracking apartment listings in Switzerland. Automatically scrapes listings from immobilier.ch, flatfox.ch, naef.ch, bernard-nicod.ch, Retraites Populaires projects (off-market), and anibis.ch, then displays them in a dashboard with status tracking, scoring, and cross-source deduplication.
+Local dashboard for tracking apartment listings in Switzerland. Automatically scrapes listings from immobilier.ch, flatfox.ch, naef.ch, bernard-nicod.ch, Retraites Populaires direct rentals + projects (off-market), and anibis.ch, then displays them in a dashboard with status tracking, scoring, and cross-source deduplication.
 
 ## Prerequisites
 
@@ -25,7 +25,7 @@ Copy `.env.example` to `.env` and fill in the values you need:
 |----------|----------|-------------|
 | `PORT` | No | Server port (default: `8787`) |
 
-> **Note:** current providers (immobilier.ch, flatfox.ch, naef.ch, bernard-nicod.ch, Retraites Populaires projects, anibis.ch) run without credentials.
+> **Note:** current providers (immobilier.ch, flatfox.ch, naef.ch, bernard-nicod.ch, Retraites Populaires rentals/projects, anibis.ch) run without credentials.
 
 ## First Run
 
@@ -37,7 +37,7 @@ On first access, the home page shows the profile list (empty initially). Click *
 - **Rooms / minimum surface**
 - **Workplace address** — autocomplete search for distance calculation
 - **Pearl detection** — toggle on/off, configure keywords, min rooms/surface, and hit threshold for listings slightly above budget that are worth flagging
-- **Sources** — which feeds to enable (immobilier.ch, flatfox.ch, naef.ch, bernard-nicod.ch, Retraites Populaires projets off-market, anibis.ch)
+- **Sources** — which feeds to enable (immobilier.ch, flatfox.ch, naef.ch, bernard-nicod.ch, Retraites Populaires locations directes + projets off-market, anibis.ch)
 
 Each profile is independent with its own data and criteria.
 

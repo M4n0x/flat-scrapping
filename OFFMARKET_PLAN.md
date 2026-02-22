@@ -51,9 +51,9 @@
 ## Delivery order
 1. ✅ Homegate removal + Naef + RP projects integrated (v1)
 2. ✅ Hardening pass 1 (non-residential filtering, stage badges/priority)
-3. 🔄 RP engine + Bernard Nicod connector
+3. ✅ RP engine + Bernard Nicod connector
    - ✅ Bernard Nicod direct listings connector added
-   - ⏳ RP listing-engine connector pending
+   - ✅ RP listing-engine connector added (via Drupal settings `offers` feed)
 4. ⏳ Institutional lead connectors and alerting enrichment
 
 ## Acceptance criteria for v1

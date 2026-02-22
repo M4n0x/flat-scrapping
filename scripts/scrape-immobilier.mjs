@@ -2071,6 +2071,147 @@ async function scrapeBernardNicodListings(config) {
   return out;
 }
 
+function parseDrupalSettingsJson(html = '') {
+  const match = String(html || '').match(/<script[^>]+data-drupal-selector="drupal-settings-json"[^>]*>([\s\S]*?)<\/script>/i);
+  if (!match?.[1]) return null;
+
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+function parseRetraitesUniqueId(url = '') {
+  const m = String(url || '').match(/[?&]uniqueId=([a-z0-9]+)/i);
+  return m?.[1] ? m[1] : '';
+}
+
+function parseRetraitesOffer(offer = {}, markerById = new Map()) {
+  const uniqueId = parseRetraitesUniqueId(offer?.link || '');
+  if (!uniqueId) return null;
+
+  const marker = markerById.get(uniqueId) || null;
+  const attrs = marker?.attributes || {};
+
+  const city = String(offer?.city || attrs?.city || '').trim();
+  const postalCode = String(offer?.postal_code || attrs?.postal_code || '').trim();
+  const street = String(offer?.street || attrs?.street || '').trim();
+  const address = [street, [postalCode, city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+
+  const rooms = toPositiveNumber(String(offer?.rooms || attrs?.rooms_number || '').replace(',', '.'));
+  const surfaceM2 = toPositiveNumber(offer?.surface ?? attrs?.surface);
+
+  const rentChf = toPositiveNumber(attrs?.price ?? offer?.price);
+  const chargesChf = toPositiveNumber(attrs?.price_extra) ?? 0;
+  const totalChf = rentChf != null ? rentChf + (chargesChf || 0) : toPositiveNumber(offer?.price);
+
+  const pictureSizes = Array.isArray(attrs?.pictures?.sizes) ? attrs.pictures.sizes : [];
+  const medium = pictureSizes.flatMap((s) => Array.isArray(s?.m) ? s.m : []);
+  const large = pictureSizes.flatMap((s) => Array.isArray(s?.l) ? s.l : []);
+  const originals = Array.isArray(attrs?.pictures?.originals) ? attrs.pictures.originals : [];
+
+  const imageUrls = [...new Set([...medium, ...large, ...originals]
+    .map((x) => toAbsoluteUrlForHost(x, 'https://www.retraitespopulaires.ch'))
+    .filter(Boolean))].slice(0, 8);
+
+  const publishedAtRaw = String(attrs?.publication_date || '').trim();
+  const publishedAt = publishedAtRaw ? new Date(`${publishedAtRaw}T00:00:00+01:00`).toISOString() : null;
+
+  const availableDateRaw = String(offer?.available_date || attrs?.available_date || '').trim();
+
+  return {
+    id: `rp:${uniqueId}`,
+    sourceId: uniqueId,
+    url: toAbsoluteUrlForHost(offer?.link || attrs?.link || '', 'https://www.retraitespopulaires.ch'),
+    title: rooms != null ? `Appartement ${rooms} pièces` : 'Appartement',
+    objectType: rooms != null ? `Appartement ${rooms} pièces` : 'Appartement',
+    address,
+    area: city,
+    rooms,
+    surfaceM2,
+    priceRaw: totalChf != null ? `CHF ${Math.round(totalChf)}/mois` : '',
+    rentChf,
+    chargesChf,
+    totalChf,
+    imageUrl: imageUrls[0] || null,
+    imageUrls,
+    agencyName: stripTags(attrs?.agency_name || 'Retraites Populaires'),
+    agencyUrl: 'https://www.retraitespopulaires.ch',
+    providerName: stripTags(attrs?.agency_name || 'Retraites Populaires'),
+    source: 'retraitespopulaires.ch',
+    listingStage: 'early_market',
+    movingDateRaw: availableDateRaw || null,
+    publishedAt: Number.isFinite(new Date(publishedAt).getTime()) ? publishedAt : null
+  };
+}
+
+async function scrapeRetraitesPopulairesListings(config) {
+  const out = [];
+  const dedup = new Map();
+
+  const areas = Array.isArray(config?.areas) ? config.areas : [];
+  const targetAreaSet = buildTargetAreaSet(areas);
+  const rangeKm = Math.max(5, Math.min(30, Number(config?.retraitesListings?.rangeKm ?? 15)));
+  const maxPages = Math.max(1, Number(config?.retraitesListings?.maxPagesPerArea ?? 6));
+
+  for (const area of areas) {
+    const areaLabel = String(area?.label || '').trim();
+    if (!areaLabel) continue;
+
+    for (let page = 0; page < maxPages; page += 1) {
+      const params = new URLSearchParams({
+        place: areaLabel,
+        range: String(rangeKm),
+        type: '0',
+        sort_by: 'proximity_asc',
+        page: String(page)
+      });
+
+      const url = `https://www.retraitespopulaires.ch/immobilier/louer/louer-un-appartement?${params.toString()}`;
+
+      try {
+        const html = await fetchHtml(url);
+        const settings = parseDrupalSettingsJson(html);
+        const offers = Array.isArray(settings?.offers) ? settings.offers : [];
+        const markers = Array.isArray(settings?.markers) ? settings.markers : [];
+
+        if (!offers.length) {
+          if (page === 0) {
+            // no listing for this area/range
+          }
+          break;
+        }
+
+        const markerById = new Map(
+          markers
+            .map((m) => [String(m?.attributes?.uniqueID || ''), m])
+            .filter(([id]) => id)
+        );
+
+        for (const offer of offers) {
+          const parsed = parseRetraitesOffer(offer, markerById);
+          if (!parsed) continue;
+          if (!isTargetAreaCity(parsed.area || '', targetAreaSet)) continue;
+
+          const key = String(parsed.id);
+          if (!dedup.has(key) || listingQualityRank(parsed, new Map()) > listingQualityRank(dedup.get(key), new Map())) {
+            dedup.set(key, parsed);
+          }
+        }
+
+        if (offers.length < 12) break;
+      } catch (err) {
+        console.error(`WARN retraites-populaires listings area="${areaLabel}" page=${page + 1}: ${err.message}`);
+        break;
+      }
+    }
+  }
+
+  out.push(...dedup.values());
+  return out;
+}
+
 function guessProjectAreaFromHref(href = '') {
   const clean = String(href || '').split('?')[0].replace(/\/$/, '');
   const last = clean.split('/').filter(Boolean).pop() || '';
@@ -2344,6 +2485,7 @@ function makeDefaultConfig(profile, base = null) {
       flatfox: true,
       naef: true,
       bernardNicod: true,
+      retraitesListings: true,
       retraitesProjets: true,
       anibis: false
     },
@@ -2379,6 +2521,7 @@ function makeDefaultConfig(profile, base = null) {
     flatfox: template.sources?.flatfox !== false,
     naef: template.sources?.naef !== false,
     bernardNicod: template.sources?.bernardNicod !== false,
+    retraitesListings: template.sources?.retraitesListings !== false,
     retraitesProjets: template.sources?.retraitesProjets !== false,
     anibis: !!template.sources?.anibis
   };
@@ -2478,6 +2621,7 @@ async function main() {
     if (typeof config.sources.flatfox !== 'boolean') config.sources.flatfox = true;
     if (typeof config.sources.naef !== 'boolean') config.sources.naef = true;
     if (typeof config.sources.bernardNicod !== 'boolean') config.sources.bernardNicod = true;
+    if (typeof config.sources.retraitesListings !== 'boolean') config.sources.retraitesListings = true;
     if (typeof config.sources.retraitesProjets !== 'boolean') config.sources.retraitesProjets = true;
     if (typeof config.sources.anibis !== 'boolean') config.sources.anibis = false;
   }
@@ -2572,6 +2716,11 @@ async function main() {
   if (config.sources?.bernardNicod !== false) {
     const bernardItems = await scrapeBernardNicodListings(config);
     scraped.push(...bernardItems);
+  }
+
+  if (config.sources?.retraitesListings !== false) {
+    const rpListings = await scrapeRetraitesPopulairesListings(config);
+    scraped.push(...rpListings);
   }
 
   if (config.sources?.retraitesProjets !== false) {

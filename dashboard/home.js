@@ -226,6 +226,7 @@ function showForm(mode = 'create', profile = null) {
     document.getElementById('s-flatfox').checked = profile.sources?.flatfox !== false;
     document.getElementById('s-naef').checked = profile.sources?.naef !== false;
     document.getElementById('s-bernard').checked = profile.sources?.bernardNicod !== false;
+    document.getElementById('s-rp-listings').checked = profile.sources?.retraitesListings !== false;
     document.getElementById('s-rp-projects').checked = profile.sources?.retraitesProjets !== false;
     document.getElementById('s-anibis').checked = !!profile.sources?.anibis;
     document.getElementById('f-studio').checked = !!profile.filters?.allowStudioTransition;
@@ -286,6 +287,7 @@ formEl.addEventListener('submit', async (e) => {
       flatfox: document.getElementById('s-flatfox').checked,
       naef: document.getElementById('s-naef').checked,
       bernardNicod: document.getElementById('s-bernard').checked,
+      retraitesListings: document.getElementById('s-rp-listings').checked,
       retraitesProjets: document.getElementById('s-rp-projects').checked,
       anibis: document.getElementById('s-anibis').checked
     },
