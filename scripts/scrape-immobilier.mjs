@@ -2252,17 +2252,21 @@ function makeDefaultConfig(profile, base = null) {
   if (isSaintMaurice) {
     template.filters = {
       ...(template.filters || {}),
-      maxTotalChf: 1700,
-      maxTotalHardChf: 1700,
-      maxPearlTotalChf: 1700,
-      minRoomsPreferred: 3,
-      allowStudioTransition: false,
-      maxPublishedAgeDays: Number(template.filters?.maxPublishedAgeDays ?? 20)
+      maxTotalChf: Number(template.filters?.maxTotalChf ?? 1700),
+      maxTotalHardChf: Number(template.filters?.maxTotalHardChf ?? 1700),
+      maxPearlTotalChf: Number(template.filters?.maxPearlTotalChf ?? 1700),
+      minRoomsPreferred: Number(template.filters?.minRoomsPreferred ?? 3),
+      allowStudioTransition: template.filters?.allowStudioTransition === undefined
+        ? false
+        : !!template.filters?.allowStudioTransition,
+      maxPublishedAgeDays: template.filters?.maxPublishedAgeDays == null
+        ? 20
+        : Number(template.filters?.maxPublishedAgeDays)
     };
 
     template.preferences = {
       ...(template.preferences || {}),
-      workplaceAddress: 'Gare de Saint-Maurice, 1890 Saint-Maurice, Suisse'
+      workplaceAddress: template.preferences?.workplaceAddress || 'Gare de Saint-Maurice, 1890 Saint-Maurice, Suisse'
     };
     delete template.preferences.transportToLausanne;
   }
@@ -2329,12 +2333,16 @@ async function main() {
   if (PROFILE === 'saint-maurice') {
     config.filters = {
       ...(config.filters || {}),
-      maxTotalChf: 1700,
-      maxTotalHardChf: 1700,
-      maxPearlTotalChf: 1700,
-      minRoomsPreferred: 3,
-      allowStudioTransition: false,
-      maxPublishedAgeDays: Number(config.filters?.maxPublishedAgeDays ?? 20)
+      maxTotalChf: Number(config.filters?.maxTotalChf ?? 1700),
+      maxTotalHardChf: Number(config.filters?.maxTotalHardChf ?? 1700),
+      maxPearlTotalChf: Number(config.filters?.maxPearlTotalChf ?? 1700),
+      minRoomsPreferred: Number(config.filters?.minRoomsPreferred ?? 3),
+      allowStudioTransition: config.filters?.allowStudioTransition === undefined
+        ? false
+        : !!config.filters?.allowStudioTransition,
+      maxPublishedAgeDays: config.filters?.maxPublishedAgeDays == null
+        ? 20
+        : Number(config.filters?.maxPublishedAgeDays)
     };
 
     const existingWorkAddress = config.preferences?.workplaceAddress || config.preferences?.workAddress;
