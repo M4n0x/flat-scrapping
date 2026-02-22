@@ -2111,7 +2111,7 @@ function parseRetraitesMarker(marker = {}) {
   const originals = Array.isArray(attrs?.pictures?.originals) ? attrs.pictures.originals : [];
 
   const imageUrls = [...new Set([...medium, ...large, ...originals]
-    .map((x) => toAbsoluteUrlForHost(x, 'https://www.retraitespopulaires.ch'))
+    .map((x) => toAbsoluteUrlForHost(x, 'https://immobilier2.retraitespopulaires.ch'))
     .filter(Boolean))].slice(0, 8);
 
   const publishedAtRaw = String(attrs?.publication_date || '').trim();
