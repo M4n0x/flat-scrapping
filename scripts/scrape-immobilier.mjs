@@ -2082,30 +2082,29 @@ function parseDrupalSettingsJson(html = '') {
   }
 }
 
-function parseRetraitesUniqueId(url = '') {
-  const m = String(url || '').match(/[?&]uniqueId=([a-z0-9]+)/i);
-  return m?.[1] ? m[1] : '';
-}
-
-function parseRetraitesOffer(offer = {}, markerById = new Map()) {
-  const uniqueId = parseRetraitesUniqueId(offer?.link || '');
+function parseRetraitesMarker(marker = {}) {
+  const attrs = marker?.attributes || marker || {};
+  const uniqueId = String(attrs?.uniqueID || '').trim();
   if (!uniqueId) return null;
 
-  const marker = markerById.get(uniqueId) || null;
-  const attrs = marker?.attributes || {};
+  // Only residential rentals
+  if (String(attrs?.offer_type || '').toUpperCase() !== 'RENT') return null;
 
-  const city = String(offer?.city || attrs?.city || '').trim();
-  const postalCode = String(offer?.postal_code || attrs?.postal_code || '').trim();
-  const street = String(offer?.street || attrs?.street || '').trim();
-  const address = [street, [postalCode, city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const city = String(attrs?.city || '').trim();
+  const postalCode = String(attrs?.postal_code || '').trim();
+  const street = String(attrs?.street || '').trim();
+  const houseNbr = String(attrs?.house_nbr || '').trim();
+  const streetFull = houseNbr && street ? `${street} ${houseNbr}` : street;
+  const address = [streetFull, [postalCode, city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
-  const rooms = toPositiveNumber(String(offer?.rooms || attrs?.rooms_number || '').replace(',', '.'));
-  const surfaceM2 = toPositiveNumber(offer?.surface ?? attrs?.surface);
+  const rooms = toPositiveNumber(String(attrs?.rooms_number || '').replace(',', '.'));
+  const surfaceM2 = toPositiveNumber(attrs?.surface);
 
-  const rentChf = toPositiveNumber(attrs?.price ?? offer?.price);
+  const rentChf = toPositiveNumber(attrs?.price);
   const chargesChf = toPositiveNumber(attrs?.price_extra) ?? 0;
-  const totalChf = rentChf != null ? rentChf + (chargesChf || 0) : toPositiveNumber(offer?.price);
+  const totalChf = rentChf != null ? rentChf + (chargesChf || 0) : null;
 
+  // Images: prefer medium > large > originals (medium loads fastest)
   const pictureSizes = Array.isArray(attrs?.pictures?.sizes) ? attrs.pictures.sizes : [];
   const medium = pictureSizes.flatMap((s) => Array.isArray(s?.m) ? s.m : []);
   const large = pictureSizes.flatMap((s) => Array.isArray(s?.l) ? s.l : []);
@@ -2118,12 +2117,13 @@ function parseRetraitesOffer(offer = {}, markerById = new Map()) {
   const publishedAtRaw = String(attrs?.publication_date || '').trim();
   const publishedAt = publishedAtRaw ? new Date(`${publishedAtRaw}T00:00:00+01:00`).toISOString() : null;
 
-  const availableDateRaw = String(offer?.available_date || attrs?.available_date || '').trim();
+  const availableDateRaw = String(attrs?.available_date || '').trim();
+  const linkRaw = String(attrs?.link || '').trim();
 
   return {
     id: `rp:${uniqueId}`,
     sourceId: uniqueId,
-    url: toAbsoluteUrlForHost(offer?.link || attrs?.link || '', 'https://www.retraitespopulaires.ch'),
+    url: toAbsoluteUrlForHost(linkRaw, 'https://www.retraitespopulaires.ch'),
     title: rooms != null ? `Appartement ${rooms} pièces` : 'Appartement',
     objectType: rooms != null ? `Appartement ${rooms} pièces` : 'Appartement',
     address,
@@ -2147,69 +2147,48 @@ function parseRetraitesOffer(offer = {}, markerById = new Map()) {
 }
 
 async function scrapeRetraitesPopulairesListings(config) {
-  const out = [];
   const dedup = new Map();
 
   const areas = Array.isArray(config?.areas) ? config.areas : [];
   const targetAreaSet = buildTargetAreaSet(areas);
   const rangeKm = Math.max(5, Math.min(30, Number(config?.retraitesListings?.rangeKm ?? 15)));
-  const maxPages = Math.max(1, Number(config?.retraitesListings?.maxPagesPerArea ?? 6));
 
+  // One request per area — markers contain ALL results in range (no pagination needed)
   for (const area of areas) {
     const areaLabel = String(area?.label || '').trim();
     if (!areaLabel) continue;
 
-    for (let page = 0; page < maxPages; page += 1) {
-      const params = new URLSearchParams({
-        place: areaLabel,
-        range: String(rangeKm),
-        type: '0',
-        sort_by: 'proximity_asc',
-        page: String(page)
-      });
+    const params = new URLSearchParams({
+      place: areaLabel,
+      range: String(rangeKm),
+      type: '0',
+      sort_by: 'proximity_asc',
+      page: '0'
+    });
 
-      const url = `https://www.retraitespopulaires.ch/immobilier/louer/louer-un-appartement?${params.toString()}`;
+    const url = `https://www.retraitespopulaires.ch/immobilier/louer/louer-un-appartement?${params.toString()}`;
 
-      try {
-        const html = await fetchHtml(url);
-        const settings = parseDrupalSettingsJson(html);
-        const offers = Array.isArray(settings?.offers) ? settings.offers : [];
-        const markers = Array.isArray(settings?.markers) ? settings.markers : [];
+    try {
+      const html = await fetchHtml(url);
+      const settings = parseDrupalSettingsJson(html);
+      const markers = Array.isArray(settings?.markers) ? settings.markers : [];
 
-        if (!offers.length) {
-          if (page === 0) {
-            // no listing for this area/range
-          }
-          break;
+      for (const marker of markers) {
+        const parsed = parseRetraitesMarker(marker);
+        if (!parsed) continue;
+        if (!isTargetAreaCity(parsed.area || '', targetAreaSet)) continue;
+
+        const key = String(parsed.id);
+        if (!dedup.has(key) || listingQualityRank(parsed, new Map()) > listingQualityRank(dedup.get(key), new Map())) {
+          dedup.set(key, parsed);
         }
-
-        const markerById = new Map(
-          markers
-            .map((m) => [String(m?.attributes?.uniqueID || ''), m])
-            .filter(([id]) => id)
-        );
-
-        for (const offer of offers) {
-          const parsed = parseRetraitesOffer(offer, markerById);
-          if (!parsed) continue;
-          if (!isTargetAreaCity(parsed.area || '', targetAreaSet)) continue;
-
-          const key = String(parsed.id);
-          if (!dedup.has(key) || listingQualityRank(parsed, new Map()) > listingQualityRank(dedup.get(key), new Map())) {
-            dedup.set(key, parsed);
-          }
-        }
-
-        if (offers.length < 12) break;
-      } catch (err) {
-        console.error(`WARN retraites-populaires listings area="${areaLabel}" page=${page + 1}: ${err.message}`);
-        break;
       }
+    } catch (err) {
+      console.error(`WARN retraites-populaires listings area="${areaLabel}": ${err.message}`);
     }
   }
 
-  out.push(...dedup.values());
-  return out;
+  return [...dedup.values()];
 }
 
 function guessProjectAreaFromHref(href = '') {
