@@ -310,6 +310,12 @@ function buildConfigFromPayload(payload) {
   const sources = payload.sources || {};
   const preferences = payload.preferences || {};
 
+  const maxPublishedAgeRaw = filters.maxPublishedAgeDays;
+  const maxPublishedAgeDays =
+    maxPublishedAgeRaw === null || maxPublishedAgeRaw === undefined || maxPublishedAgeRaw === ''
+      ? null
+      : Number(maxPublishedAgeRaw);
+
   return {
     name: shortTitle,
     shortTitle,
@@ -323,11 +329,13 @@ function buildConfigFromPayload(payload) {
     },
     flatfox: { maxPagesPerArea: 3, recheckKnownIdsLimit: 20 },
     filters: {
+      minTotalChf: Number(filters.minTotalChf) || 0,
       maxTotalChf: Number(filters.maxTotalChf) || 1400,
       maxTotalHardChf: Number(filters.maxTotalHardChf) || 1550,
       maxPearlTotalChf: Number(filters.maxPearlTotalChf) || 1650,
       minRoomsPreferred: Number(filters.minRoomsPreferred) || 2,
       minSurfaceM2Preferred: Number(filters.minSurfaceM2Preferred) || 0,
+      allowMissingSurface: filters.allowMissingSurface !== false,
       allowStudioTransition: !!filters.allowStudioTransition,
       pearl: filters.pearl && typeof filters.pearl === 'object' ? {
         enabled: filters.pearl.enabled !== false,
@@ -336,9 +344,13 @@ function buildConfigFromPayload(payload) {
         keywords: Array.isArray(filters.pearl.keywords) ? filters.pearl.keywords.filter(Boolean) : ['rénové', 'balcon', 'terrasse', 'vue', 'quartier paisible', 'lac', 'centre'],
         minHits: Number(filters.pearl.minHits) || 1
       } : { enabled: true, minRooms: 2, minSurfaceM2: 50, keywords: ['rénové', 'balcon', 'terrasse', 'vue', 'quartier paisible', 'lac', 'centre'], minHits: 1 },
-      excludedObjectTypeKeywords: ['chambre', 'colocation', 'wg'],
-      missingScansBeforeRemoved: 2,
-      maxPublishedAgeDays: null
+      excludedObjectTypeKeywords: Array.isArray(filters.excludedObjectTypeKeywords) && filters.excludedObjectTypeKeywords.length
+        ? filters.excludedObjectTypeKeywords.map((x) => String(x).trim()).filter(Boolean)
+        : ['chambre', 'colocation', 'wg'],
+      missingScansBeforeRemoved: Math.max(1, Number(filters.missingScansBeforeRemoved) || 2),
+      maxPublishedAgeDays: Number.isFinite(maxPublishedAgeDays) && maxPublishedAgeDays > 0
+        ? maxPublishedAgeDays
+        : null
     },
     preferences: {
       workplaceAddress: preferences.workplaceAddress || null

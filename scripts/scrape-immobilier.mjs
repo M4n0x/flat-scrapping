@@ -2322,12 +2322,12 @@ async function main() {
 
   if (PROFILE === 'fribourg' || PROFILE === 'saint-maurice') {
     config.sources = {
-      ...(config.sources || {}),
-      immobilier: true,
-      flatfox: true,
-      homegate: false,
-      anibis: false
+      ...(config.sources || {})
     };
+    if (typeof config.sources.immobilier !== 'boolean') config.sources.immobilier = true;
+    if (typeof config.sources.flatfox !== 'boolean') config.sources.flatfox = true;
+    if (typeof config.sources.homegate !== 'boolean') config.sources.homegate = false;
+    if (typeof config.sources.anibis !== 'boolean') config.sources.anibis = false;
   }
 
   if (PROFILE === 'saint-maurice') {
