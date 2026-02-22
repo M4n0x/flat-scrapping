@@ -362,6 +362,11 @@ function isNewToday(item) {
 function stateBadgesHtml(item) {
   const badges = [];
   if (isNewToday(item) && !item.isRemoved) badges.push('<span class="state-badge new">Nouveau</span>');
+
+  const stage = String(item?.listingStage || '').toLowerCase();
+  if (stage === 'off_market') badges.push('<span class="state-badge offmarket">Off-market</span>');
+  else if (stage === 'early_market') badges.push('<span class="state-badge early">Direct régie</span>');
+
   if (item.isRemoved) badges.push('<span class="state-badge removed">Retirée</span>');
 
   return badges.length ? `<div class="state-badges">${badges.join('')}</div>` : '';

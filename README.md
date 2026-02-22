@@ -1,18 +1,17 @@
 # Apartment Search 🏠
 
-Local dashboard for tracking apartment listings in Switzerland. Automatically scrapes listings from immobilier.ch, flatfox.ch, homegate.ch, and anibis.ch, then displays them in a dashboard with status tracking, scoring, and cross-source deduplication.
+Local dashboard for tracking apartment listings in Switzerland. Automatically scrapes listings from immobilier.ch, flatfox.ch, naef.ch, Retraites Populaires projects (off-market), and anibis.ch, then displays them in a dashboard with status tracking, scoring, and cross-source deduplication.
 
 ## Prerequisites
 
 - **Node.js 18+** (no npm dependencies to install)
-- **Homegate credentials** (optional, only if you enable homegate.ch as a source) — see `.env.example`
 
 ## Getting Started
 
 ```bash
 git clone <repo-url>
 cd flat-scrapping
-cp .env.example .env   # optional — only needed for homegate.ch
+cp .env.example .env   # optional — only if you want a custom PORT
 npm start
 ```
 
@@ -24,12 +23,9 @@ Copy `.env.example` to `.env` and fill in the values you need:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `HOMEGATE_API_USERNAME` | Only for homegate.ch | API username for Homegate's mobile API |
-| `HOMEGATE_API_PASSWORD` | Only for homegate.ch | API password |
-| `HOMEGATE_SECRET` | Only for homegate.ch | HMAC signing secret |
 | `PORT` | No | Server port (default: `8787`) |
 
-> **Note:** immobilier.ch, flatfox.ch, and anibis.ch work without any credentials. Homegate credentials are only needed if you enable it as a source in your profile.
+> **Note:** current providers (immobilier.ch, flatfox.ch, naef.ch, Retraites Populaires projects, anibis.ch) run without credentials.
 
 ## First Run
 
@@ -41,7 +37,7 @@ On first access, the home page shows the profile list (empty initially). Click *
 - **Rooms / minimum surface**
 - **Workplace address** — autocomplete search for distance calculation
 - **Pearl detection** — toggle on/off, configure keywords, min rooms/surface, and hit threshold for listings slightly above budget that are worth flagging
-- **Sources** — which sites to enable (immobilier.ch, flatfox.ch, homegate.ch, anibis.ch)
+- **Sources** — which feeds to enable (immobilier.ch, flatfox.ch, naef.ch, Retraites Populaires projets off-market, anibis.ch)
 
 Each profile is independent with its own data and criteria.
 

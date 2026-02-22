@@ -224,7 +224,8 @@ function showForm(mode = 'create', profile = null) {
     document.getElementById('f-workplace').value = profile.preferences?.workplaceAddress ?? '';
     document.getElementById('s-immobilier').checked = profile.sources?.immobilier !== false;
     document.getElementById('s-flatfox').checked = profile.sources?.flatfox !== false;
-    document.getElementById('s-homegate').checked = !!profile.sources?.homegate;
+    document.getElementById('s-naef').checked = profile.sources?.naef !== false;
+    document.getElementById('s-rp-projects').checked = profile.sources?.retraitesProjets !== false;
     document.getElementById('s-anibis').checked = !!profile.sources?.anibis;
     document.getElementById('f-studio').checked = !!profile.filters?.allowStudioTransition;
 
@@ -282,7 +283,8 @@ formEl.addEventListener('submit', async (e) => {
     sources: {
       immobilier: document.getElementById('s-immobilier').checked,
       flatfox: document.getElementById('s-flatfox').checked,
-      homegate: document.getElementById('s-homegate').checked,
+      naef: document.getElementById('s-naef').checked,
+      retraitesProjets: document.getElementById('s-rp-projects').checked,
       anibis: document.getElementById('s-anibis').checked
     },
     filters: {

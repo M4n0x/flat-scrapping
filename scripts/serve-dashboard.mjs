@@ -85,7 +85,13 @@ function makeDefaultConfig(profile, base = null) {
     shortTitle: profile.charAt(0).toUpperCase() + profile.slice(1),
     areas: [{ slug: profile, label: profile.charAt(0).toUpperCase() + profile.slice(1) }],
     pagesPerArea: 2,
-    sources: { immobilier: true, flatfox: true, homegate: false, anibis: false },
+    sources: {
+      immobilier: true,
+      flatfox: true,
+      naef: true,
+      retraitesProjets: true,
+      anibis: false
+    },
     flatfox: { maxPagesPerArea: 3, recheckKnownIdsLimit: 20 },
     filters: {
       maxTotalChf: 1400,
@@ -324,7 +330,8 @@ function buildConfigFromPayload(payload) {
     sources: {
       immobilier: sources.immobilier !== false,
       flatfox: sources.flatfox !== false,
-      homegate: !!sources.homegate,
+      naef: sources.naef !== false,
+      retraitesProjets: sources.retraitesProjets !== false,
       anibis: !!sources.anibis
     },
     flatfox: { maxPagesPerArea: 3, recheckKnownIdsLimit: 20 },

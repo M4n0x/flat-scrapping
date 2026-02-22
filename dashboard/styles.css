@@ -633,6 +633,18 @@ a:hover {
   color: #ffcbd2;
 }
 
+.state-badge.offmarket {
+  background: rgba(255, 189, 89, 0.18);
+  border-color: rgba(255, 189, 89, 0.45);
+  color: #ffe2af;
+}
+
+.state-badge.early {
+  background: rgba(140, 174, 255, 0.18);
+  border-color: rgba(140, 174, 255, 0.45);
+  color: #d8e6ff;
+}
+
 .meta-source {
   font-size: 0.72rem;
   color: #9fb8d8;

@@ -56,21 +56,13 @@ const {
 const STATUSES = ['À contacter', 'Visite', 'Dossier', 'Relance', 'Accepté', 'Refusé', 'Sans réponse'];
 const SOURCE_PRIORITY = {
   'immobilier.ch': 30,
-  'homegate.ch': 25,
+  'naef.ch': 27,
   'flatfox.ch': 20,
+  'retraitespopulaires.ch': 18,
   'anibis.ch': 15
 };
 
 const DEFAULT_NON_SPECULATIVE_GROUPS = [];
-
-const HOMEGATE_API_URL = process.env.HOMEGATE_API_URL || 'https://api.homegate.ch/search/listings';
-const HOMEGATE_API_USERNAME = process.env.HOMEGATE_API_USERNAME || '';
-const HOMEGATE_API_PASSWORD = process.env.HOMEGATE_API_PASSWORD || '';
-const HOMEGATE_USER_AGENT = process.env.HOMEGATE_USER_AGENT || 'homegate.ch App Android';
-const HOMEGATE_APP_VERSION = process.env.HOMEGATE_APP_VERSION || 'Homegate/12.6.0/12060003/Android/30';
-const HOMEGATE_SECRET = process.env.HOMEGATE_SECRET
-  ? Buffer.from(process.env.HOMEGATE_SECRET)
-  : Buffer.alloc(0);
 
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif'];
 const IMAGE_EXT_BY_CONTENT_TYPE = {
@@ -428,6 +420,15 @@ function computeScore(item, config) {
   let score = 0;
   const reasons = [];
 
+  const listingStage = String(item?.listingStage || '').toLowerCase();
+  if (listingStage === 'off_market') {
+    score += 20;
+    reasons.push('Stage: +20 (signal off-market)');
+  } else if (listingStage === 'early_market') {
+    score += 8;
+    reasons.push('Stage: +8 (direct régie)');
+  }
+
   if (item.totalChf != null) {
     const total = Number(item.totalChf);
 
@@ -502,6 +503,10 @@ function computeScore(item, config) {
 }
 
 function derivePriority(item, config) {
+  const listingStage = String(item?.listingStage || '').toLowerCase();
+  if (listingStage === 'off_market') return 'A';
+  if (listingStage === 'early_market') return 'A-';
+
   const budget = config.filters?.maxTotalChf ?? 1400;
   const hardBudget = config.filters?.maxTotalHardChf ?? 1550;
   const minRooms = config.filters?.minRoomsPreferred ?? 2;
@@ -1008,57 +1013,6 @@ function fetchJson(url) {
     req.setTimeout(20000, () => {
       req.destroy(new Error(`Timeout on ${url}`));
     });
-  });
-}
-
-function postJson(url, payload, extraHeaders = {}) {
-  return new Promise((resolve, reject) => {
-    const body = JSON.stringify(payload || {});
-    const u = new URL(url);
-
-    const req = https.request(
-      {
-        protocol: u.protocol,
-        hostname: u.hostname,
-        port: u.port || (u.protocol === 'https:' ? 443 : 80),
-        path: `${u.pathname}${u.search}`,
-        method: 'POST',
-        headers: {
-          'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          accept: 'application/json,text/plain,*/*',
-          'content-type': 'application/json',
-          'content-length': Buffer.byteLength(body),
-          ...extraHeaders
-        }
-      },
-      (res) => {
-        let raw = '';
-        res.on('data', (chunk) => {
-          raw += chunk;
-        });
-        res.on('end', () => {
-          if (res.statusCode && res.statusCode >= 400) {
-            const snippet = String(raw || '').slice(0, 220).replace(/\s+/g, ' ').trim();
-            reject(new Error(`HTTP ${res.statusCode} on ${url}${snippet ? `: ${snippet}` : ''}`));
-            return;
-          }
-
-          try {
-            resolve(JSON.parse(raw));
-          } catch (err) {
-            reject(new Error(`Invalid JSON on ${url}: ${err.message}`));
-          }
-        });
-      }
-    );
-
-    req.on('error', reject);
-    req.setTimeout(25000, () => {
-      req.destroy(new Error(`Timeout on ${url}`));
-    });
-
-    req.write(body);
-    req.end();
   });
 }
 
@@ -1824,209 +1778,242 @@ async function scrapeFlatfoxListings(config) {
   return out;
 }
 
-function calculateHomegateAppId(now = new Date()) {
-  const ceilMinute = Math.ceil(Math.floor(now.getTime() / 1000) / 60);
-  const payload = `${HOMEGATE_USER_AGENT}${HOMEGATE_APP_VERSION}${ceilMinute}`;
-  const digest = crypto.createHmac('sha256', HOMEGATE_SECRET).update(payload).digest();
-  const offset = digest[digest.length - 1] & 0x0f;
-  return String(digest.readInt32BE(offset));
-}
+function extractJsonArrayVariable(html = '', variableName = '') {
+  const varToken = `var ${variableName}`;
+  const idx = String(html || '').indexOf(varToken);
+  if (idx < 0) return null;
 
-function getHomegateHeaders() {
-  const auth = Buffer.from(`${HOMEGATE_API_USERNAME}:${HOMEGATE_API_PASSWORD}`).toString('base64');
-  return {
-    authorization: `Basic ${auth}`,
-    'x-app-id': calculateHomegateAppId(),
-    'x-app-version': HOMEGATE_APP_VERSION,
-    'user-agent': HOMEGATE_USER_AGENT,
-    accept: 'application/json',
-    'content-type': 'application/json'
-  };
-}
+  const start = String(html || '').indexOf('[', idx);
+  if (start < 0) return null;
 
-function makeHomegateSearchRequest(location, config, from = 0) {
-  const maxRent = toPositiveNumber(config?.filters?.maxPearlTotalChf ?? config?.filters?.maxTotalHardChf);
-  const minRooms = toPositiveNumber(config?.filters?.minRoomsPreferred ?? 0);
-  const minSurface = toPositiveNumber(config?.filters?.minSurfaceM2Preferred ?? 0);
-  const radius = Math.max(500, Number(config?.homegate?.radiusMeters ?? 5000));
+  let depth = 0;
+  let inString = false;
+  let quote = '';
+  let escaped = false;
 
-  const localeTemplate = {
-    attachments: true,
-    text: { title: true },
-    urls: { type: true }
-  };
+  for (let i = start; i < html.length; i += 1) {
+    const ch = html[i];
 
-  return {
-    from,
-    size: Math.max(1, Math.min(50, Number(config?.homegate?.pageSize ?? 20))),
-    sortBy: 'listingType',
-    sortDirection: 'desc',
-    trackTotalHits: true,
-    query: {
-      categories: [
-        'APARTMENT',
-        'FLAT',
-        'MAISONETTE',
-        'DUPLEX',
-        'ATTIC_FLAT',
-        'ROOF_FLAT',
-        'STUDIO',
-        'SINGLE_ROOM',
-        'TERRACE_FLAT',
-        'BACHELOR_FLAT',
-        'LOFT'
-      ],
-      excludeCategories: ['FURNISHED_FLAT'],
-      livingSpace: { from: minSurface != null ? Math.round(minSurface) : null, to: null },
-      location: {
-        latitude: Number(location.lat),
-        longitude: Number(location.lon),
-        radius
-      },
-      monthlyRent: { from: null, to: maxRent != null ? Math.round(maxRent) : null },
-      numberOfRooms: { from: minRooms != null ? Number(minRooms) : null, to: null },
-      offerType: 'RENT'
-    },
-    resultTemplate: {
-      id: true,
-      listerBranding: true,
-      listing: {
-        address: {
-          country: true,
-          geoCoordinates: { latitude: true, longitude: true },
-          locality: true,
-          postOfficeBoxNumber: true,
-          postalCode: true,
-          region: true,
-          street: true,
-          streetAddition: true
-        },
-        categories: true,
-        characteristics: {
-          livingSpace: true,
-          lotSize: true,
-          numberOfRooms: true,
-          singleFloorSpace: true,
-          totalFloorSpace: true
-        },
-        id: true,
-        lister: { logoUrl: true, phone: true },
-        localization: {
-          de: localeTemplate,
-          en: localeTemplate,
-          fr: localeTemplate,
-          it: localeTemplate,
-          primary: true
-        },
-        offerType: true,
-        prices: true
-      },
-      listingType: true,
-      remoteViewing: true
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === quote) {
+        inString = false;
+        quote = '';
+      }
+      continue;
     }
-  };
+
+    if (ch === '"' || ch === "'") {
+      inString = true;
+      quote = ch;
+      continue;
+    }
+
+    if (ch === '[') {
+      depth += 1;
+      continue;
+    }
+
+    if (ch === ']') {
+      depth -= 1;
+      if (depth === 0) {
+        return html.slice(start, i + 1);
+      }
+    }
+  }
+
+  return null;
 }
 
-function pickHomegateLocalizationEntry(localization = {}) {
-  const primary = String(localization?.primary || '').toLowerCase();
-  return localization?.[primary]
-    || localization?.fr
-    || localization?.de
-    || localization?.en
-    || localization?.it
-    || null;
-}
+function parseNaefListing(raw, fallbackAreaLabel = '') {
+  const sourceId = String(raw?.no_dossier || '').trim();
+  if (!sourceId) return null;
 
-function parseHomegateListing(raw, fallbackAreaLabel = '') {
-  const listing = raw?.listing;
-  const sourceId = String(raw?.id || listing?.id || '').trim();
-  if (!sourceId || !listing) return null;
+  const typeText = `${raw?.type_designation_fr || ''} ${raw?.type_code || ''} ${raw?.intitule_plaquette || ''}`.toLowerCase();
+  if (/parking|garage|depot|dépôt|surface|bureau|commerce|arcade|atelier|immeuble|terrain/.test(typeText)) {
+    return null;
+  }
 
-  const rent = listing?.prices?.rent || {};
-  const rentNet = toPositiveNumber(rent?.net);
-  const rentExtra = toPositiveNumber(rent?.extra) ?? 0;
-  const rentGross = toPositiveNumber(rent?.gross);
-  const totalChf = rentGross ?? (rentNet != null ? rentNet + rentExtra : null);
+  const rooms = toPositiveNumber(String(raw?.nb_pieces || '').replace(',', '.'))
+    ?? parseRooms(raw?.intitule_plaquette || raw?.type_designation_fr || '');
 
-  const loc = pickHomegateLocalizationEntry(listing?.localization || {});
-  const imageUrls = [...new Set(
-    (Array.isArray(loc?.attachments) ? loc.attachments : [])
-      .filter((a) => String(a?.type || '').toUpperCase() === 'IMAGE')
-      .map((a) => toAbsoluteUrlForHost(a?.url || '', 'https://www.homegate.ch'))
-      .filter(Boolean)
-  )].slice(0, 8);
+  const totalChf = toPositiveNumber(raw?.loyer_mensuel_brut) ?? toPositiveNumber(raw?.loyer_mensuel_net);
+  const rentChf = toPositiveNumber(raw?.loyer_mensuel_net) ?? totalChf;
+  const chargesChf = totalChf != null && rentChf != null ? Math.max(0, totalChf - rentChf) : 0;
 
-  const title = stripTags(loc?.text?.title || 'Appartement');
-  const addressObj = listing?.address || {};
-  const city = String(addressObj?.locality || fallbackAreaLabel || '').trim();
-  const postcode = String(addressObj?.postalCode || '').trim();
-  const street = String(addressObj?.street || '').trim();
-  const address = [street, [postcode, city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const city = String(raw?.adresse_localite || fallbackAreaLabel || '').trim();
+  const postcode = String(raw?.npa || '').trim();
+  const address = [raw?.adresse_rue, [postcode, city].filter(Boolean).join(' ')].map((x) => String(x || '').trim()).filter(Boolean).join(', ');
 
-  const agencyName = stripTags(raw?.listerBranding?.legalName || raw?.listerBranding?.name || '');
+  const url = toAbsoluteUrlForHost(raw?.link || '', 'https://www.naef.ch');
+  if (!url || /\/vente\//i.test(url)) return null;
+
+  const imageUrls = [...new Set((Array.isArray(raw?.imgs) ? raw.imgs : [])
+    .map((x) => toAbsoluteUrlForHost(x, 'https://www.naef.ch'))
+    .filter(Boolean))].slice(0, 6);
+
+  const publishedAtRaw = String(raw?.date_modification || '').trim();
+  const publishedAt = publishedAtRaw
+    ? new Date(publishedAtRaw.replace(' ', 'T')).toISOString()
+    : null;
 
   return {
-    id: `homegate:${sourceId}`,
+    id: `naef:${sourceId}`,
     sourceId,
-    url: `https://www.homegate.ch/rent/${sourceId}`,
-    title,
-    objectType: Number.isFinite(Number(listing?.characteristics?.numberOfRooms))
-      ? `Appartement ${Number(listing.characteristics.numberOfRooms)} pièces`
-      : 'Appartement',
+    url,
+    title: stripTags(raw?.intitule_plaquette || raw?.type_designation_fr || 'Appartement'),
+    objectType: stripTags(raw?.type_designation_fr || (rooms != null ? `Appartement ${rooms} pièces` : 'Appartement')),
     address,
     area: city,
-    rooms: toPositiveNumber(listing?.characteristics?.numberOfRooms),
-    surfaceM2: toPositiveNumber(listing?.characteristics?.livingSpace),
+    rooms,
+    surfaceM2: toPositiveNumber(raw?.surface_habitable),
     priceRaw: totalChf != null ? `CHF ${Math.round(totalChf)}/mois` : '',
-    rentChf: rentNet,
-    chargesChf: rentExtra,
+    rentChf,
+    chargesChf,
     totalChf,
     imageUrl: imageUrls[0] || null,
     imageUrls,
-    agencyName: agencyName || null,
-    agencyUrl: null,
-    providerName: agencyName || null,
-    source: 'homegate.ch',
-    publishedAt: null
-  }; 
+    agencyName: 'Naef Immobilier',
+    agencyUrl: 'https://www.naef.ch',
+    providerName: 'Naef Immobilier',
+    source: 'naef.ch',
+    listingStage: 'early_market',
+    publishedAt: Number.isFinite(new Date(publishedAt).getTime()) ? publishedAt : null
+  };
 }
 
-async function scrapeHomegateListings(config, geocodeCache = {}) {
+async function scrapeNaefListings(config) {
   const out = [];
-  const areas = Array.isArray(config?.areas) ? config.areas : [];
-  const targetAreaSet = buildTargetAreaSet(areas);
-  const maxPagesPerArea = Math.max(1, Number(config?.homegate?.maxPagesPerArea ?? 2));
-  const pageSize = Math.max(1, Math.min(50, Number(config?.homegate?.pageSize ?? 20)));
+  const targetAreaSet = buildTargetAreaSet(config?.areas || []);
 
-  for (const area of areas) {
-    const areaLabel = String(area?.label || '').trim();
-    if (!areaLabel) continue;
+  try {
+    const html = await fetchHtml('https://www.naef.ch/louer/appartements-maisons/');
+    const jsonArray = extractJsonArrayVariable(html, 'all_db_datas');
+    if (!jsonArray) return out;
 
-    const cantonLabel = String(area?.canton || 'Vaud').trim();
-    const location = await geocodeAddress(`${areaLabel}, ${cantonLabel}, Suisse`, geocodeCache);
-    if (!location || typeof location !== 'object') continue;
-
-    for (let page = 0; page < maxPagesPerArea; page += 1) {
-      const from = page * pageSize;
-      const payload = makeHomegateSearchRequest(location, config, from);
-
-      try {
-        const data = await postJson(HOMEGATE_API_URL, payload, getHomegateHeaders());
-        const results = Array.isArray(data?.results) ? data.results : [];
-
-        for (const entry of results) {
-          const parsed = parseHomegateListing(entry, areaLabel);
-          if (!parsed) continue;
-          if (!isTargetAreaCity(parsed.area || '', targetAreaSet)) continue;
-          out.push(parsed);
-        }
-
-        if (results.length < pageSize) break;
-      } catch (err) {
-        console.error(`WARN homegate area="${areaLabel}" page=${page + 1}: ${err.message}`);
-        break;
-      }
+    const entries = JSON.parse(jsonArray);
+    for (const raw of entries) {
+      const parsed = parseNaefListing(raw);
+      if (!parsed) continue;
+      if (!isTargetAreaCity(parsed.area || '', targetAreaSet)) continue;
+      out.push(parsed);
     }
+  } catch (err) {
+    console.error(`WARN naef source: ${err.message}`);
+  }
+
+  return out;
+}
+
+function guessProjectAreaFromHref(href = '') {
+  const clean = String(href || '').split('?')[0].replace(/\/$/, '');
+  const last = clean.split('/').filter(Boolean).pop() || '';
+  if (!last) return '';
+
+  const words = last
+    .split('-')
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .filter((x) => !/^\d+$/.test(x))
+    .filter((x) => !['rue', 'route', 'avenue', 'av', 'chemin', 'de', 'du', 'des', 'la', 'le', 'les'].includes(x.toLowerCase()));
+
+  if (!words.length) return '';
+  return words.slice(-3).join(' ');
+}
+
+function parseRetraitesProjectTeaser(html = '', href = '') {
+  const clean = stripTags(String(html || '')).replace(/\s+/g, ' ').trim();
+  if (!clean) return null;
+  if (/tout est lou[ée]?/i.test(clean)) return null;
+
+  const extractedLocation = clean.match(/(?:Logement|Mixte)\s+(.+?)\s+Promotions/i)?.[1]?.trim();
+  const fallbackTitle = guessProjectAreaFromHref(href)
+    .split(' ')
+    .map((x) => x ? x[0].toUpperCase() + x.slice(1) : x)
+    .join(' ')
+    .trim();
+  const title = extractedLocation || fallbackTitle || clean;
+
+  const description = clean;
+  const commaArea = String(title.split(',').slice(-1)[0] || '').trim();
+  const area = commaArea || guessProjectAreaFromHref(href);
+  const sourceId = crypto.createHash('sha1').update(String(href || title)).digest('hex').slice(0, 20);
+
+  return {
+    id: `rp-project:${sourceId}`,
+    sourceId,
+    url: toAbsoluteUrlForHost(href, 'https://www.retraitespopulaires.ch'),
+    title,
+    objectType: 'Projet locatif (pré-commercialisation)',
+    address: title,
+    area,
+    rooms: null,
+    surfaceM2: null,
+    priceRaw: '',
+    rentChf: null,
+    chargesChf: 0,
+    totalChf: null,
+    imageUrl: null,
+    imageUrls: [],
+    agencyName: 'Retraites Populaires',
+    agencyUrl: 'https://www.retraitespopulaires.ch',
+    providerName: 'Retraites Populaires',
+    source: 'retraitespopulaires.ch',
+    listingStage: 'off_market',
+    projectDescription: description,
+    publishedAt: null
+  };
+}
+
+function matchesProjectToTargetAreas(project = {}, targetAreaSet) {
+  if (!targetAreaSet || !targetAreaSet.size) return true;
+
+  const haystack = normalizeKeyText([
+    project?.title,
+    project?.address,
+    project?.area,
+    project?.projectDescription,
+    project?.url
+  ].filter(Boolean).join(' '));
+
+  for (const areaToken of targetAreaSet) {
+    const key = normalizeKeyText(areaToken);
+    if (key && haystack.includes(key)) return true;
+  }
+
+  return false;
+}
+
+async function scrapeRetraitesPopulairesProjects(config) {
+  const out = [];
+  const seen = new Set();
+  const targetAreaSet = buildTargetAreaSet(config?.areas || []);
+
+  try {
+    const html = await fetchHtml('https://www.retraitespopulaires.ch/location/parc-immobilier-et-projets-neufs');
+    const matches = [...html.matchAll(/<a[^>]+href="([^"]*\/location\/parc-immobilier-et-projets-neuf[^"#?]*)"[^>]*>([\s\S]*?)<\/a>/gi)];
+
+    for (const match of matches) {
+      const href = String(match?.[1] || '').trim();
+      if (!href || /parc-immobilier-et-projets-neufs\/?$/i.test(href)) continue;
+
+      const teaser = parseRetraitesProjectTeaser(match?.[2] || '', href);
+      if (!teaser?.url || seen.has(teaser.url)) continue;
+      seen.add(teaser.url);
+
+      if (!matchesProjectToTargetAreas(teaser, targetAreaSet)) continue;
+
+      out.push(teaser);
+    }
+  } catch (err) {
+    console.error(`WARN retraites-populaires projets: ${err.message}`);
   }
 
   return out;
@@ -2196,7 +2183,8 @@ function makeDefaultConfig(profile, base = null) {
     sources: {
       immobilier: true,
       flatfox: true,
-      homegate: false,
+      naef: true,
+      retraitesProjets: true,
       anibis: false
     },
     flatfox: { maxPagesPerArea: 3, recheckKnownIdsLimit: 20 },
@@ -2227,10 +2215,11 @@ function makeDefaultConfig(profile, base = null) {
   template.areas = defaultAreasForProfile(profile);
   template.sources = {
     ...(template.sources || {}),
-    immobilier: true,
-    flatfox: true,
-    homegate: false,
-    anibis: false
+    immobilier: template.sources?.immobilier !== false,
+    flatfox: template.sources?.flatfox !== false,
+    naef: template.sources?.naef !== false,
+    retraitesProjets: template.sources?.retraitesProjets !== false,
+    anibis: !!template.sources?.anibis
   };
   template.flatfox = {
     maxPagesPerArea: 3,
@@ -2326,7 +2315,8 @@ async function main() {
     };
     if (typeof config.sources.immobilier !== 'boolean') config.sources.immobilier = true;
     if (typeof config.sources.flatfox !== 'boolean') config.sources.flatfox = true;
-    if (typeof config.sources.homegate !== 'boolean') config.sources.homegate = false;
+    if (typeof config.sources.naef !== 'boolean') config.sources.naef = true;
+    if (typeof config.sources.retraitesProjets !== 'boolean') config.sources.retraitesProjets = true;
     if (typeof config.sources.anibis !== 'boolean') config.sources.anibis = false;
   }
 
@@ -2412,9 +2402,14 @@ async function main() {
     scraped.push(...flatfoxItems);
   }
 
-  if (config.sources?.homegate !== false) {
-    const homegateItems = await scrapeHomegateListings(config, geocodeCache);
-    scraped.push(...homegateItems);
+  if (config.sources?.naef !== false) {
+    const naefItems = await scrapeNaefListings(config);
+    scraped.push(...naefItems);
+  }
+
+  if (config.sources?.retraitesProjets !== false) {
+    const rpProjectItems = await scrapeRetraitesPopulairesProjects(config);
+    scraped.push(...rpProjectItems);
   }
 
   if (config.sources?.anibis !== false) {
@@ -2491,13 +2486,17 @@ async function main() {
     item.nonSpeculativeEligible = nonSpecMeta.eligible;
     item.nonSpeculativeFilterReason = nonSpecMeta.reason;
 
-    item.display = !item.excludedType
-      && item.sizeEligible
-      && item.aboveMinBudget
-      && (item.withinHardBudget || item.isPearl)
-      && item.publicationEligible
-      && item.locationEligible
-      && item.nonSpeculativeEligible;
+    const isOffMarketListing = String(item.listingStage || '').toLowerCase() === 'off_market';
+
+    item.display = isOffMarketListing
+      ? (!item.excludedType && item.locationEligible && item.nonSpeculativeEligible)
+      : (!item.excludedType
+        && item.sizeEligible
+        && item.aboveMinBudget
+        && (item.withinHardBudget || item.isPearl)
+        && item.publicationEligible
+        && item.locationEligible
+        && item.nonSpeculativeEligible);
 
     if (item.isPearl && !item.withinHardBudget) {
       item.priority = 'A★';
@@ -2542,10 +2541,11 @@ async function main() {
 
     if (!item.display) {
       if (item.excludedType) item.filterReason = 'Type exclu (chambre/colocation)';
-      else if (!item.aboveMinBudget) item.filterReason = `En dessous de CHF ${minBudget}`;
-      else if (!item.sizeEligible) item.filterReason = 'Taille non prioritaire';
       else if (!item.locationEligible) item.filterReason = item.locationFilterReason || 'Hors zones ciblées';
       else if (!item.nonSpeculativeEligible) item.filterReason = item.nonSpeculativeFilterReason || 'Bailleur hors liste non spéculative';
+      else if (isOffMarketListing) item.filterReason = 'Signal off-market non prioritaire';
+      else if (!item.aboveMinBudget) item.filterReason = `En dessous de CHF ${minBudget}`;
+      else if (!item.sizeEligible) item.filterReason = 'Taille non prioritaire';
       else if (!item.publicationEligible) {
         item.filterReason = `Annonce trop ancienne (> ${item.maxPublishedAgeDays} jours)`;
       } else item.filterReason = `Au-dessus de CHF ${hardBudget}`;
@@ -2664,22 +2664,27 @@ async function main() {
         nonSpeculativeFilterReason: nonSpecMeta.reason
       };
 
-      refreshed.display = !refreshed.excludedType
-        && refreshed.sizeEligible
-        && refreshed.aboveMinBudget
-        && (refreshed.withinHardBudget || refreshed.isPearl)
-        && refreshed.publicationEligible
-        && refreshed.locationEligible
-        && refreshed.nonSpeculativeEligible;
+      const isOffMarketListing = String(old.listingStage || '').toLowerCase() === 'off_market';
+
+      refreshed.display = isOffMarketListing
+        ? (!refreshed.excludedType && refreshed.locationEligible && refreshed.nonSpeculativeEligible)
+        : (!refreshed.excludedType
+          && refreshed.sizeEligible
+          && refreshed.aboveMinBudget
+          && (refreshed.withinHardBudget || refreshed.isPearl)
+          && refreshed.publicationEligible
+          && refreshed.locationEligible
+          && refreshed.nonSpeculativeEligible);
 
       refreshed.priority = refreshed.isPearl && !refreshed.withinHardBudget ? 'A★' : derivePriority(old, config);
 
       if (!refreshed.display) {
         if (refreshed.excludedType) refreshed.filterReason = 'Type exclu (chambre/colocation)';
-        else if (!refreshed.aboveMinBudget) refreshed.filterReason = `En dessous de CHF ${minBudget}`;
-        else if (!refreshed.sizeEligible) refreshed.filterReason = 'Taille non prioritaire';
         else if (!refreshed.locationEligible) refreshed.filterReason = refreshed.locationFilterReason || 'Hors zones ciblées';
         else if (!refreshed.nonSpeculativeEligible) refreshed.filterReason = refreshed.nonSpeculativeFilterReason || 'Bailleur hors liste non spéculative';
+        else if (isOffMarketListing) refreshed.filterReason = 'Signal off-market non prioritaire';
+        else if (!refreshed.aboveMinBudget) refreshed.filterReason = `En dessous de CHF ${minBudget}`;
+        else if (!refreshed.sizeEligible) refreshed.filterReason = 'Taille non prioritaire';
         else if (!refreshed.publicationEligible) {
           refreshed.filterReason = `Annonce trop ancienne (> ${refreshed.maxPublishedAgeDays} jours)`;
         } else refreshed.filterReason = `Au-dessus de CHF ${hardBudget}`;
