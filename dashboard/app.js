@@ -568,6 +568,10 @@ function applyFilterAndSort(items) {
     if (mode === 'pearl') {
       return !item.isRemoved && !!item.isPearl;
     }
+    if (mode === 'direct') {
+      const stage = String(item.listingStage || '').toLowerCase();
+      return !item.isRemoved && (stage === 'early_market' || stage === 'off_market');
+    }
     return true;
   });
 
@@ -1120,11 +1124,17 @@ function renderCards(listings, latest) {
   const removed = listings.filter((x) => !!x.isRemoved).length;
   const news = listings.filter((x) => isNewToday(x) && !x.isRemoved).length;
 
+  const direct = listings.filter((x) => {
+    const stage = String(x.listingStage || '').toLowerCase();
+    return !x.isRemoved && (stage === 'early_market' || stage === 'off_market');
+  }).length;
+
   cardsEl.innerHTML = '';
   cardsEl.append(
     card('Annonces visibles', listings.length, 'all'),
     card('Priorité haute', top, 'top'),
     card('Perles ⭐', pearls, 'pearl'),
+    card('Régie directe', direct, 'direct'),
     card('Urgentes', urgent, 'urgent'),
     card('Priorité B', priorityB, 'transition'),
     card('Nouvelles', news, 'new'),
