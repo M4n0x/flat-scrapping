@@ -565,7 +565,7 @@ function isSizeEligible(item, config) {
   const meetsRooms = rooms >= minRooms;
   const isBelowRooms = rooms < minRooms;
 
-  // Plan B (studio/transition): below min rooms but allowed — skip surface check
+  // Plan B (studio/transition): below min rooms but allowed - skip surface check
   if (isBelowRooms && studioAllowed) return true;
 
   // If minSurfaceFallback is set, use OR logic: rooms >= minRooms OR surface >= fallback
@@ -681,7 +681,7 @@ function extractMoveInDateFromAdditionalInfo(text = '') {
   const clean = stripTags(String(text || '')).replace(/\s+/g, ' ').trim();
   if (!clean) return null;
 
-  if (!/(date\s+d['’]?entr(?:é|e)e|disponibilit(?:é|e)|disponible|a\s+partir|à\s+partir)/i.test(clean)) {
+  if (!/(date\s+d['']?entr(?:é|e)e|disponibilit(?:é|e)|disponible|a\s+partir|à\s+partir)/i.test(clean)) {
     return null;
   }
 
@@ -1680,7 +1680,7 @@ function parseFlatfoxMoveInDate(value = '') {
 }
 
 function parseFlatfoxPriceFromText(text = '') {
-  const m = String(text || '').match(/CHF\s*([\d'’\s.,]+)/i);
+  const m = String(text || '').match(/CHF\s*([\d''\s.,]+)/i);
   if (!m) return null;
   return toPositiveNumber(chfToNumber(m[1] || ''));
 }
@@ -1953,9 +1953,71 @@ function parseHtmlTagAttributes(tag = '') {
 }
 
 function parseBernardPrice(text = '') {
-  const m = String(text || '').match(/CHF\s*([\d'’\s.,]+)/i);
+  const m = String(text || '').match(/CHF\s*([\d''\s.,]+)/i);
   if (!m) return null;
   return toPositiveNumber(chfToNumber(m[1] || ''));
+}
+
+async function enrichBernardNicodFromDetail(item) {
+  if (!item?.url) return;
+
+  try {
+    const html = await fetchHtml(item.url);
+
+    // Address: "Vaud, LA TOUR-DE-PEILZ, Chemin des Bulesses 55"
+    const addrMatch = html.match(/Adresse\s*:\s*(?:<[^>]*>\s*)*([^<]+)/i);
+    if (addrMatch) {
+      const raw = addrMatch[1].trim();
+      // Format: "Canton, CITY, Street Nr" → keep "Street Nr, NPA City"
+      const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.length >= 3) {
+        // parts[0]=Canton, parts[1]=CITY, parts[2..]=Street
+        const street = parts.slice(2).join(', ');
+        const city = parts[1];
+        if (street) item.address = `${street}, ${city}`;
+        if (city) item.area = city;
+      } else if (parts.length === 2) {
+        const city = parts[1] || parts[0];
+        if (city) item.area = city;
+      }
+    }
+
+    // Loyer brut (charges included)
+    const brutMatch = html.match(/Loyer\s+brut\s*:\s*CHF\s*([\d''\s.,]+)/i);
+    const netMatch = html.match(/Loyer\s+net\s*:\s*CHF\s*([\d''\s.,]+)/i);
+    const acompteMatch = html.match(/Acompte\s*:\s*CHF\s*([\d''\s.,]+)/i);
+
+    const brut = brutMatch ? toPositiveNumber(chfToNumber(brutMatch[1])) : null;
+    const net = netMatch ? toPositiveNumber(chfToNumber(netMatch[1])) : null;
+    const acompte = acompteMatch ? toPositiveNumber(chfToNumber(acompteMatch[1])) : null;
+
+    if (brut != null) {
+      item.totalChf = brut;
+      item.rentChf = net ?? item.rentChf;
+      item.chargesChf = acompte ?? (net != null ? Math.round(brut - net) : 0);
+      item.priceRaw = `CHF ${Math.round(brut)}/mois`;
+    }
+
+    // Rooms from description (e.g. "Appartement de 2 pièces" or "3.5 pièces")
+    if (item.rooms == null) {
+      const roomsMatch = html.match(/(\d+\.?\d*)\s*pi[eè]ces?/i);
+      if (roomsMatch) item.rooms = toPositiveNumber(roomsMatch[1]);
+    }
+
+    // Surface from description
+    if (item.surfaceM2 == null) {
+      const surfMatch = html.match(/Surface\s+habitable\s*:\s*([\d''\s.,]+)\s*m/i);
+      if (surfMatch) item.surfaceM2 = toPositiveNumber(chfToNumber(surfMatch[1]));
+    }
+
+    // Update derived fields
+    if (item.rooms != null) {
+      item.objectType = `Appartement ${item.rooms} pièces`;
+      item.title = item.title || item.objectType;
+    }
+  } catch (err) {
+    // Detail fetch failed — keep card data
+  }
 }
 
 function buildBernardSourceId(href = '', title = '') {
@@ -2068,6 +2130,11 @@ async function scrapeBernardNicodListings(config) {
     }
   }
 
+  // Enrich each listing with detail page data (address, brut price, rooms, surface)
+  for (const item of out) {
+    await enrichBernardNicodFromDetail(item);
+  }
+
   return out;
 }
 
@@ -2153,7 +2220,7 @@ async function scrapeRetraitesPopulairesListings(config) {
   const targetAreaSet = buildTargetAreaSet(areas);
   const rangeKm = Math.max(5, Math.min(30, Number(config?.retraitesListings?.rangeKm ?? 15)));
 
-  // One request per area — markers contain ALL results in range (no pagination needed)
+  // One request per area - markers contain ALL results in range (no pagination needed)
   for (const area of areas) {
     const areaLabel = String(area?.label || '').trim();
     if (!areaLabel) continue;
