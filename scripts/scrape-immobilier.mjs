@@ -2136,6 +2136,8 @@ function parseRetraitesMarker(marker = {}) {
     totalChf,
     imageUrl: imageUrls[0] || null,
     imageUrls,
+    imageUrlsRemote: imageUrls,
+    imageUrlsLocal: [],
     agencyName: stripTags(attrs?.agency_name || 'Retraites Populaires'),
     agencyUrl: 'https://www.retraitespopulaires.ch',
     providerName: stripTags(attrs?.agency_name || 'Retraites Populaires'),
