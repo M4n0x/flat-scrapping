@@ -548,6 +548,10 @@ function matchesCardFilter(item, key) {
   if (key === 'pearl') return !item.isRemoved && !!item.isPearl;
   if (key === 'transition') return !item.isRemoved && (String(item.priority || '') === 'B' || (item.rooms ?? 0) < 2);
   if (key === 'urgent') return !item.isRemoved && getUrgency(item).level === 'high';
+  if (key === 'direct') {
+    const stage = String(item.listingStage || '').toLowerCase();
+    return !item.isRemoved && (stage === 'early_market' || stage === 'off_market');
+  }
   if (key === 'new') return !item.isRemoved && isNewToday(item);
   if (key === 'removed') return !!item.isRemoved;
   return true;
