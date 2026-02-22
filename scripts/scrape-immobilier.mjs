@@ -2093,9 +2093,7 @@ function parseRetraitesMarker(marker = {}) {
   const city = String(attrs?.city || '').trim();
   const postalCode = String(attrs?.postal_code || '').trim();
   const street = String(attrs?.street || '').trim();
-  const houseNbr = String(attrs?.house_nbr || '').trim();
-  const streetFull = houseNbr && street ? `${street} ${houseNbr}` : street;
-  const address = [streetFull, [postalCode, city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const address = [street, [postalCode, city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
   const rooms = toPositiveNumber(String(attrs?.rooms_number || '').replace(',', '.'));
   const surfaceM2 = toPositiveNumber(attrs?.surface);
