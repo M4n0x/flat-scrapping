@@ -1953,9 +1953,14 @@ function parseHtmlTagAttributes(tag = '') {
 }
 
 function parseBernardPrice(text = '') {
-  const m = String(text || '').match(/CHF\s*([\d''\s.,]+)/i);
+  const m = String(text || '').match(/CHF\s*([\d'''`\u2018\u2019\s.,]+)/i);
   if (!m) return null;
-  return toPositiveNumber(chfToNumber(m[1] || ''));
+  // Strip thousands separators (apostrophes) and trailing decimals (.00 / .-)
+  const cleaned = String(m[1] || '')
+    .replace(/['''`\u2018\u2019\s]/g, '')  // remove thousands separators
+    .replace(/\.\-$/, '')                   // trailing .- (e.g. "1700.-")
+    .replace(/\.00$/, '');                  // trailing .00 (e.g. "1500.00")
+  return toPositiveNumber(Number(cleaned));
 }
 
 async function enrichBernardNicodFromDetail(item) {
@@ -1983,13 +1988,13 @@ async function enrichBernardNicodFromDetail(item) {
     }
 
     // Loyer brut (charges included)
-    const brutMatch = html.match(/Loyer\s+brut\s*:\s*CHF\s*([\d''\s.,]+)/i);
-    const netMatch = html.match(/Loyer\s+net\s*:\s*CHF\s*([\d''\s.,]+)/i);
-    const acompteMatch = html.match(/Acompte\s*:\s*CHF\s*([\d''\s.,]+)/i);
+    const brutMatch = html.match(/Loyer\s+brut\s*:\s*CHF\s*([\d'''`\u2018\u2019\s.,]+)/i);
+    const netMatch = html.match(/Loyer\s+net\s*:\s*CHF\s*([\d'''`\u2018\u2019\s.,]+)/i);
+    const acompteMatch = html.match(/Acompte\s*:\s*CHF\s*([\d'''`\u2018\u2019\s.,]+)/i);
 
-    const brut = brutMatch ? toPositiveNumber(chfToNumber(brutMatch[1])) : null;
-    const net = netMatch ? toPositiveNumber(chfToNumber(netMatch[1])) : null;
-    const acompte = acompteMatch ? toPositiveNumber(chfToNumber(acompteMatch[1])) : null;
+    const brut = brutMatch ? parseBernardPrice(`CHF ${brutMatch[1]}`) : null;
+    const net = netMatch ? parseBernardPrice(`CHF ${netMatch[1]}`) : null;
+    const acompte = acompteMatch ? parseBernardPrice(`CHF ${acompteMatch[1]}`) : null;
 
     if (brut != null) {
       item.totalChf = brut;
