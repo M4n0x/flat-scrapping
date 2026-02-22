@@ -521,6 +521,21 @@ function derivePriority(item, config) {
   return 'B';
 }
 
+function isLikelyResidentialListing(item = {}) {
+  const text = `${item.objectType || ''} ${item.title || ''}`.toLowerCase();
+  const url = String(item?.url || '').toLowerCase();
+
+  if (/\/location\/(parking|local|commerce|bureau|terrain)\//i.test(url)) return false;
+  if (/parking|garage|place de parc|place ouverte|d[eé]pot|surface commerciale|bureau|commerce|arcade|terrain|atelier/.test(text)) {
+    return false;
+  }
+
+  if (/appartement|studio|loft|duplex|attique|maison|pi[eè]ces?/.test(text)) return true;
+
+  const rooms = toPositiveNumber(item?.rooms);
+  return rooms != null && rooms > 0;
+}
+
 function isExcludedType(item, config) {
   const text = `${item.objectType || ''} ${item.title || ''}`.toLowerCase();
   const keywords = config.filters?.excludedObjectTypeKeywords || ['chambre', 'colocation', 'wg'];
@@ -537,6 +552,14 @@ function isSizeEligible(item, config) {
   const rooms = Number(item.rooms ?? 0);
   const surface = Number(item.surfaceM2 ?? 0);
   const hasSurface = Number.isFinite(item.surfaceM2) && item.surfaceM2 > 0;
+
+  const descriptor = `${item?.objectType || ''} ${item?.title || ''}`.toLowerCase();
+  const looksResidential = /appartement|studio|loft|duplex|attique|maison|pi[eè]ces?/.test(descriptor);
+
+  // Guardrail: invalid/missing room count should not qualify as "plan B" unless clearly residential.
+  if (!Number.isFinite(rooms) || rooms <= 0) {
+    return studioAllowed && looksResidential;
+  }
 
   const meetsRooms = rooms >= minRooms;
   const isBelowRooms = rooms < minRooms;
@@ -1836,6 +1859,10 @@ function parseNaefListing(raw, fallbackAreaLabel = '') {
   const sourceId = String(raw?.no_dossier || '').trim();
   if (!sourceId) return null;
 
+  const naefTypeCode = String(raw?.type_code || '').trim().toUpperCase();
+  // Keep apartments only (Naef feed includes parking/commercial objects too).
+  if (naefTypeCode !== 'APP') return null;
+
   const typeText = `${raw?.type_designation_fr || ''} ${raw?.type_code || ''} ${raw?.intitule_plaquette || ''}`.toLowerCase();
   if (/parking|garage|depot|dépôt|surface|bureau|commerce|arcade|atelier|immeuble|terrain/.test(typeText)) {
     return null;
@@ -1853,7 +1880,7 @@ function parseNaefListing(raw, fallbackAreaLabel = '') {
   const address = [raw?.adresse_rue, [postcode, city].filter(Boolean).join(' ')].map((x) => String(x || '').trim()).filter(Boolean).join(', ');
 
   const url = toAbsoluteUrlForHost(raw?.link || '', 'https://www.naef.ch');
-  if (!url || /\/vente\//i.test(url)) return null;
+  if (!url || /\/vente\//i.test(url) || /\/location\/(parking|local|commerce|bureau|terrain)\//i.test(url)) return null;
 
   const imageUrls = [...new Set((Array.isArray(raw?.imgs) ? raw.imgs : [])
     .map((x) => toAbsoluteUrlForHost(x, 'https://www.naef.ch'))
@@ -2638,6 +2665,22 @@ async function main() {
           isNew: false,
           display: false,
           filterReason: 'Hors zone suivie'
+        });
+        continue;
+      }
+
+      const nonResidentialNaef = String(old?.source || '').toLowerCase() === 'naef.ch' && !isLikelyResidentialListing(old);
+      if (nonResidentialNaef) {
+        merged.push({
+          ...old,
+          status: normalizeStatus(old.status),
+          active: false,
+          isRemoved: true,
+          removedAt: old.removedAt || now,
+          missingCount: nextMissing,
+          isNew: false,
+          display: false,
+          filterReason: 'Objet non résidentiel (filtré)'
         });
         continue;
       }
