@@ -49,10 +49,12 @@
 - Stage: `off_market` leads, not necessarily structured listing feeds.
 
 ## Delivery order
-1. Homegate removal + Naef + RP projects integrated (v1)
-2. Hardening (dedup tuning, scoring weights, rate limits)
-3. RP engine + Bernard Nicod connector
-4. Institutional lead connectors and alerting enrichment
+1. ✅ Homegate removal + Naef + RP projects integrated (v1)
+2. ✅ Hardening pass 1 (non-residential filtering, stage badges/priority)
+3. 🔄 RP engine + Bernard Nicod connector
+   - ✅ Bernard Nicod direct listings connector added
+   - ⏳ RP listing-engine connector pending
+4. ⏳ Institutional lead connectors and alerting enrichment
 
 ## Acceptance criteria for v1
 - Homegate no longer visible in UI and no longer scraped.

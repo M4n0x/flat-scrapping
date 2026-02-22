@@ -89,6 +89,7 @@ function makeDefaultConfig(profile, base = null) {
       immobilier: true,
       flatfox: true,
       naef: true,
+      bernardNicod: true,
       retraitesProjets: true,
       anibis: false
     },
@@ -331,6 +332,7 @@ function buildConfigFromPayload(payload) {
       immobilier: sources.immobilier !== false,
       flatfox: sources.flatfox !== false,
       naef: sources.naef !== false,
+      bernardNicod: sources.bernardNicod !== false,
       retraitesProjets: sources.retraitesProjets !== false,
       anibis: !!sources.anibis
     },

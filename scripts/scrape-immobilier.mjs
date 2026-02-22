@@ -57,6 +57,7 @@ const STATUSES = ['À contacter', 'Visite', 'Dossier', 'Relance', 'Accepté', 'R
 const SOURCE_PRIORITY = {
   'immobilier.ch': 30,
   'naef.ch': 27,
+  'bernard-nicod.ch': 26,
   'flatfox.ch': 20,
   'retraitespopulaires.ch': 18,
   'anibis.ch': 15
@@ -1939,6 +1940,137 @@ async function scrapeNaefListings(config) {
   return out;
 }
 
+function parseHtmlTagAttributes(tag = '') {
+  const out = {};
+  const regex = /([:@a-zA-Z0-9_-]+)="([^"]*)"/g;
+  let match;
+
+  while ((match = regex.exec(String(tag || '')))) {
+    out[match[1]] = decodeHtml(match[2] || '');
+  }
+
+  return out;
+}
+
+function parseBernardPrice(text = '') {
+  const m = String(text || '').match(/CHF\s*([\d'’\s.,]+)/i);
+  if (!m) return null;
+  return toPositiveNumber(chfToNumber(m[1] || ''));
+}
+
+function buildBernardSourceId(href = '', title = '') {
+  const clean = String(href || '').split('?')[0].replace(/\/$/, '');
+  const tail = clean.split('/').filter(Boolean).pop() || '';
+  const numeric = tail.match(/-(\d+)$/);
+  if (numeric?.[1]) return numeric[1];
+  return crypto.createHash('sha1').update(`${clean}|${title}`).digest('hex').slice(0, 16);
+}
+
+function parseBernardNicodPropertyCard(rawTag = '', fallbackAreaLabel = '') {
+  const attrs = parseHtmlTagAttributes(rawTag);
+  const href = String(attrs.href || '').trim();
+  if (!href) return null;
+
+  const url = toAbsoluteUrlForHost(href, 'https://www.bernard-nicod.ch');
+  if (!url || /\/vente\//i.test(url)) return null;
+  if (/\/location\/(parking|local|commerce|bureau|terrain)\//i.test(url)) return null;
+
+  const title = stripTags(attrs.title || slugToTitle(href) || 'Appartement');
+  const lower = title.toLowerCase();
+
+  if (/parking|garage|place de parc|villa|maison|chalet|surface|bureau|commerce|arcade|terrain|immeuble/.test(lower)) {
+    return null;
+  }
+  if (!/(appartement|studio|loft|duplex|pi[eè]ces?)/.test(lower)) {
+    return null;
+  }
+
+  let imageUrls = [];
+  try {
+    const parsed = JSON.parse(String(attrs[':images'] || '[]'));
+    imageUrls = [...new Set((Array.isArray(parsed) ? parsed : [])
+      .map((x) => toAbsoluteUrlForHost(x, 'https://www.bernard-nicod.ch'))
+      .filter(Boolean))].slice(0, 8);
+  } catch {
+    imageUrls = [];
+  }
+
+  const location = stripTags(attrs.location || fallbackAreaLabel || '');
+  const area = location || fallbackAreaLabel || '';
+  const surfaceM2 = String(attrs['additional-suffix'] || '').includes('m')
+    ? toPositiveNumber(String(attrs.additional || '').replace(',', '.'))
+    : null;
+  const rooms = parseRooms(title);
+
+  const totalChf = parseBernardPrice(attrs.price || '');
+  const sourceId = buildBernardSourceId(href, title);
+
+  return {
+    id: `bernard:${sourceId}`,
+    sourceId,
+    url,
+    title,
+    objectType: rooms != null ? `Appartement ${rooms} pièces` : 'Appartement',
+    address: area,
+    area,
+    rooms,
+    surfaceM2,
+    priceRaw: stripTags(attrs.price || ''),
+    rentChf: totalChf,
+    chargesChf: 0,
+    totalChf,
+    imageUrl: imageUrls[0] || null,
+    imageUrls,
+    agencyName: 'Bernard Nicod',
+    agencyUrl: 'https://www.bernard-nicod.ch',
+    providerName: 'Bernard Nicod',
+    source: 'bernard-nicod.ch',
+    listingStage: 'early_market',
+    publishedAt: null
+  };
+}
+
+function parseBernardLastPage(html = '') {
+  const pages = [...String(html || '').matchAll(/page=(\d+)/gi)]
+    .map((m) => Number(m[1]))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (!pages.length) return 1;
+  return Math.max(...pages);
+}
+
+async function scrapeBernardNicodListings(config) {
+  const out = [];
+  const targetAreaSet = buildTargetAreaSet(config?.areas || []);
+  const maxPages = Math.max(1, Number(config?.bernardNicod?.maxPages ?? 8));
+
+  let lastPage = 1;
+
+  for (let page = 1; page <= Math.min(maxPages, lastPage || maxPages); page += 1) {
+    try {
+      const url = `https://www.bernard-nicod.ch/search-ajax/buy?action=louer&transaction=buy&page=${page}`;
+      const html = await fetchHtml(url);
+      if (page === 1) {
+        lastPage = Math.max(1, Math.min(maxPages, parseBernardLastPage(html)));
+      }
+
+      const cardTags = [...html.matchAll(/<property-card\s+([^>]+)>/gi)].map((m) => m[1]);
+      if (!cardTags.length) break;
+
+      for (const rawTag of cardTags) {
+        const parsed = parseBernardNicodPropertyCard(rawTag);
+        if (!parsed) continue;
+        if (!isTargetAreaCity(parsed.area || '', targetAreaSet)) continue;
+        out.push(parsed);
+      }
+    } catch (err) {
+      console.error(`WARN bernard-nicod page=${page}: ${err.message}`);
+      break;
+    }
+  }
+
+  return out;
+}
+
 function guessProjectAreaFromHref(href = '') {
   const clean = String(href || '').split('?')[0].replace(/\/$/, '');
   const last = clean.split('/').filter(Boolean).pop() || '';
@@ -2211,6 +2343,7 @@ function makeDefaultConfig(profile, base = null) {
       immobilier: true,
       flatfox: true,
       naef: true,
+      bernardNicod: true,
       retraitesProjets: true,
       anibis: false
     },
@@ -2245,6 +2378,7 @@ function makeDefaultConfig(profile, base = null) {
     immobilier: template.sources?.immobilier !== false,
     flatfox: template.sources?.flatfox !== false,
     naef: template.sources?.naef !== false,
+    bernardNicod: template.sources?.bernardNicod !== false,
     retraitesProjets: template.sources?.retraitesProjets !== false,
     anibis: !!template.sources?.anibis
   };
@@ -2343,6 +2477,7 @@ async function main() {
     if (typeof config.sources.immobilier !== 'boolean') config.sources.immobilier = true;
     if (typeof config.sources.flatfox !== 'boolean') config.sources.flatfox = true;
     if (typeof config.sources.naef !== 'boolean') config.sources.naef = true;
+    if (typeof config.sources.bernardNicod !== 'boolean') config.sources.bernardNicod = true;
     if (typeof config.sources.retraitesProjets !== 'boolean') config.sources.retraitesProjets = true;
     if (typeof config.sources.anibis !== 'boolean') config.sources.anibis = false;
   }
@@ -2432,6 +2567,11 @@ async function main() {
   if (config.sources?.naef !== false) {
     const naefItems = await scrapeNaefListings(config);
     scraped.push(...naefItems);
+  }
+
+  if (config.sources?.bernardNicod !== false) {
+    const bernardItems = await scrapeBernardNicodListings(config);
+    scraped.push(...bernardItems);
   }
 
   if (config.sources?.retraitesProjets !== false) {
@@ -2669,8 +2809,10 @@ async function main() {
         continue;
       }
 
-      const nonResidentialNaef = String(old?.source || '').toLowerCase() === 'naef.ch' && !isLikelyResidentialListing(old);
-      if (nonResidentialNaef) {
+      const sourceLower = String(old?.source || '').toLowerCase();
+      const nonResidentialDirectSource = ['naef.ch', 'bernard-nicod.ch'].includes(sourceLower)
+        && !isLikelyResidentialListing(old);
+      if (nonResidentialDirectSource) {
         merged.push({
           ...old,
           status: normalizeStatus(old.status),
