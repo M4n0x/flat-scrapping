@@ -1136,7 +1136,6 @@ function renderCards(listings, latest) {
     card('Perles ⭐', pearls, 'pearl'),
     card('Régie directe', direct, 'direct'),
     card('Urgentes', urgent, 'urgent'),
-    card('Priorité B', priorityB, 'transition'),
     card('Nouvelles', news, 'new'),
     card('Retirées', removed, 'removed')
   );
