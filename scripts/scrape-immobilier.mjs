@@ -970,6 +970,48 @@ async function fetchMoveInDate(objectId) {
   }
 }
 
+/**
+ * Lightweight check: is the listing URL still returning a valid page?
+ * Returns true if the listing appears to still be live (HTTP 200 on the
+ * original host), false if clearly removed (404/410/redirect to homepage).
+ * On network errors or ambiguous results, returns true (conservative —
+ * don't remove what we can't confirm is gone).
+ */
+async function isListingUrlStillLive(url) {
+  if (!url || typeof url !== 'string') return false;
+
+  try {
+    const result = await fetchHtmlWithRedirects(url, 3);
+    const code = Number(result.statusCode || 0);
+    if (code >= 400) return false;
+
+    // Check if we were redirected to a generic page (homepage / search)
+    const originalHost = new URL(url).hostname;
+    const finalHost = new URL(result.finalUrl || url).hostname;
+    if (finalHost !== originalHost) return false;
+
+    const finalPath = new URL(result.finalUrl || url).pathname;
+    // Redirected to homepage or generic search = listing removed
+    if (finalPath === '/' || finalPath === '' || /^\/(search|recherche|louer|fr\/?)?$/i.test(finalPath)) {
+      return false;
+    }
+
+    // Quick content sanity: if the response is very short or contains
+    // typical "not found" markers, treat as removed
+    const html = String(result.html || '');
+    if (html.length < 500) return false;
+    if (/cette annonce n.{0,5}existe plus|annonce retir|listing not found|page introuvable/i.test(html)) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    // Network error, timeout, HTTP 4xx/5xx thrown by fetchHtmlWithRedirects
+    // Be conservative: don't remove if we can't reach the site
+    return true;
+  }
+}
+
 function fetchHtml(url) {
   return new Promise((resolve, reject) => {
     const req = https.get(
@@ -3015,7 +3057,7 @@ async function main() {
         continue;
       }
 
-      const nextMissing = Number(old.missingCount || 0) + 1;
+      let nextMissing = Number(old.missingCount || 0) + 1;
 
       const outOfScopeListing = !isTargetAreaCity(old.area || '', targetAreaSet);
 
@@ -3106,9 +3148,22 @@ async function main() {
       const duplicateOfActive = refreshed.display !== false && oldDedupKey && activeDedupKeys.has(oldDedupKey);
       const excludedAnibisSale = isStoredAnibisSaleListing(old);
       const anibisSourceDisabled = String(old?.source || '') === 'anibis.ch' && config.sources?.anibis === false;
-      const shouldRemove = duplicateOfActive || excludedAnibisSale || anibisSourceDisabled
+      let shouldRemove = duplicateOfActive || excludedAnibisSale || anibisSourceDisabled
         ? true
         : (refreshed.display === false ? false : nextMissing >= missingScansBeforeRemoved);
+
+      // Before marking a visible listing as removed due to missing scans,
+      // verify the listing URL is actually gone. If the page is still live,
+      // reset missingCount and keep it active.
+      if (shouldRemove && !duplicateOfActive && !excludedAnibisSale && !anibisSourceDisabled
+          && refreshed.display !== false && old.url) {
+        const stillLive = await isListingUrlStillLive(old.url);
+        if (stillLive) {
+          shouldRemove = false;
+          nextMissing = 0;
+          console.log(`INFO ${old.id}: URL still live, keeping active despite missing from scrape`);
+        }
+      }
 
       if (duplicateOfActive || excludedAnibisSale || anibisSourceDisabled) {
         merged.push({
