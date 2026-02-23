@@ -2029,20 +2029,39 @@ async function enrichBernardNicodFromDetail(item) {
       }
     }
 
-    // Loyer brut (charges included)
-    const brutMatch = html.match(/Loyer\s+brut\s*:\s*CHF\s*([\d'''`\u2018\u2019\s.,]+)/i);
-    const netMatch = html.match(/Loyer\s+net\s*:\s*CHF\s*([\d'''`\u2018\u2019\s.,]+)/i);
-    const acompteMatch = html.match(/Acompte\s*:\s*CHF\s*([\d'''`\u2018\u2019\s.,]+)/i);
+    // Loyer brut (charges included) — matches both "CHF" and "Fr." currency prefixes
+    // Format A (structured): "Loyer: CHF 1'770.-" + "Charges: CHF 200.- / mois"
+    // Format B (description): "Loyer mensuel brut : Fr. 1'550.00" / net / acompte
+    const currencyRe = /(?:CHF|Fr\.?)\s*/;
+    const amountRe = /([\d'\u2018\u2019`\s.,]+)/;
+    const brutMatch = html.match(new RegExp("Loyer\\s+(?:mensuel\\s+)?brut\\s*:?\\s*" + currencyRe.source + amountRe.source, "i"));
+    const netMatch = html.match(new RegExp("Loyer\\s+(?:mensuel\\s+)?net\\s*:?\\s*" + currencyRe.source + amountRe.source, "i"));
+    const acompteMatch = html.match(new RegExp("Acompte\\s*(?:de\\s+charges)?\\s*:?\\s*" + currencyRe.source + amountRe.source, "i"));
 
     const brut = brutMatch ? parseBernardPrice(`CHF ${brutMatch[1]}`) : null;
     const net = netMatch ? parseBernardPrice(`CHF ${netMatch[1]}`) : null;
     const acompte = acompteMatch ? parseBernardPrice(`CHF ${acompteMatch[1]}`) : null;
 
     if (brut != null) {
+      // Format B found — use explicit brut/net/acompte
       item.totalChf = brut;
       item.rentChf = net ?? item.rentChf;
       item.chargesChf = acompte ?? (net != null ? Math.round(brut - net) : 0);
       item.priceRaw = `CHF ${Math.round(brut)}/mois`;
+    } else {
+      // Format A fallback — look for separate "Charges:" line
+      // Matches "Charges:  \n CHF 200.-" or "Charges: CHF 200.- / mois" across tags
+      const chargesBlockMatch = html.match(/Charges\s*:\s*(?:<[^>]*>\s*)*(?:CHF|Fr\.?)\s*([\d'\u2018\u2019`\s.,]+)/i);
+      const structuredCharges = chargesBlockMatch ? parseBernardPrice(`CHF ${chargesBlockMatch[1]}`) : null;
+      if (structuredCharges != null && structuredCharges > 0) {
+        const rentNet = item.totalChf ?? item.rentChf;
+        if (rentNet != null) {
+          item.rentChf = rentNet;
+          item.chargesChf = structuredCharges;
+          item.totalChf = rentNet + structuredCharges;
+          item.priceRaw = `CHF ${Math.round(item.totalChf)}/mois`;
+        }
+      }
     }
 
     // Rooms from description (e.g. "Appartement de 2 pièces" or "3.5 pièces")
