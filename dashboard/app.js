@@ -27,11 +27,8 @@ const PROFILE = (() => {
 const PROFILE_TITLES = {
   vevey: 'Vevey et environs',
   fribourg: 'Fribourg et environs',
-  'saint-maurice': 'Saint-Maurice (VS)',
-  projets: 'Projets neufs'
+  'saint-maurice': 'Saint-Maurice (VS)'
 };
-
-const IS_PROJECTS = PROFILE === 'projets';
 
 let profileAreasText = '';
 
@@ -1125,18 +1122,6 @@ function renderMobile(listings) {
 
 function renderCards(listings, latest) {
   cardsEl.innerHTML = '';
-
-  if (IS_PROJECTS) {
-    const active = listings.filter((x) => !x.isRemoved).length;
-    const news = listings.filter((x) => isNewToday(x) && !x.isRemoved).length;
-    const removed = listings.filter((x) => !!x.isRemoved).length;
-    cardsEl.append(
-      card('Projets actifs', active, 'all'),
-      card('Nouveaux', news, 'new'),
-      card('Terminés / loués', removed, 'removed')
-    );
-    return;
-  }
 
   const top = listings.filter((x) => String(x.priority || '').startsWith('A') && !x.isRemoved).length;
   const pearls = listings.filter((x) => !!x.isPearl && !x.isRemoved).length;

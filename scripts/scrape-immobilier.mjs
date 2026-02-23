@@ -2324,113 +2324,6 @@ async function scrapeRetraitesPopulairesListings(config) {
   return [...dedup.values()];
 }
 
-function guessProjectAreaFromHref(href = '') {
-  const clean = String(href || '').split('?')[0].replace(/\/$/, '');
-  const last = clean.split('/').filter(Boolean).pop() || '';
-  if (!last) return '';
-
-  const words = last
-    .split('-')
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .filter((x) => !/^\d+$/.test(x))
-    .filter((x) => !['rue', 'route', 'avenue', 'av', 'chemin', 'de', 'du', 'des', 'la', 'le', 'les'].includes(x.toLowerCase()));
-
-  if (!words.length) return '';
-  return words.slice(-3).join(' ');
-}
-
-function parseRetraitesProjectTeaser(html = '', href = '') {
-  const clean = stripTags(String(html || '')).replace(/\s+/g, ' ').trim();
-  if (!clean) return null;
-  if (/tout est lou[ée]?/i.test(clean)) return null;
-
-  const extractedLocation = clean.match(/(?:Logement|Mixte)\s+(.+?)\s+Promotions/i)?.[1]?.trim();
-  const fallbackTitle = guessProjectAreaFromHref(href)
-    .split(' ')
-    .map((x) => x ? x[0].toUpperCase() + x.slice(1) : x)
-    .join(' ')
-    .trim();
-  const title = extractedLocation || fallbackTitle || clean;
-
-  const description = clean;
-  const commaArea = String(title.split(',').slice(-1)[0] || '').trim();
-  const area = commaArea || guessProjectAreaFromHref(href);
-  const sourceId = crypto.createHash('sha1').update(String(href || title)).digest('hex').slice(0, 20);
-
-  return {
-    id: `rp-project:${sourceId}`,
-    sourceId,
-    url: toAbsoluteUrlForHost(href, 'https://www.retraitespopulaires.ch'),
-    title,
-    objectType: 'Projet locatif (pré-commercialisation)',
-    address: title,
-    area,
-    rooms: null,
-    surfaceM2: null,
-    priceRaw: '',
-    rentChf: null,
-    chargesChf: 0,
-    totalChf: null,
-    imageUrl: null,
-    imageUrls: [],
-    agencyName: 'Retraites Populaires',
-    agencyUrl: 'https://www.retraitespopulaires.ch',
-    providerName: 'Retraites Populaires',
-    source: 'retraitespopulaires.ch',
-    listingStage: 'off_market',
-    projectDescription: description,
-    publishedAt: null
-  };
-}
-
-function matchesProjectToTargetAreas(project = {}, targetAreaSet) {
-  if (!targetAreaSet || !targetAreaSet.size) return true;
-
-  const haystack = normalizeKeyText([
-    project?.title,
-    project?.address,
-    project?.area,
-    project?.projectDescription,
-    project?.url
-  ].filter(Boolean).join(' '));
-
-  for (const areaToken of targetAreaSet) {
-    const key = normalizeKeyText(areaToken);
-    if (key && haystack.includes(key)) return true;
-  }
-
-  return false;
-}
-
-async function scrapeRetraitesPopulairesProjects(config) {
-  const out = [];
-  const seen = new Set();
-  const targetAreaSet = buildTargetAreaSet(config?.areas || []);
-
-  try {
-    const html = await fetchHtml('https://www.retraitespopulaires.ch/location/parc-immobilier-et-projets-neufs');
-    const matches = [...html.matchAll(/<a[^>]+href="([^"]*\/location\/parc-immobilier-et-projets-neuf[^"#?]*)"[^>]*>([\s\S]*?)<\/a>/gi)];
-
-    for (const match of matches) {
-      const href = String(match?.[1] || '').trim();
-      if (!href || /parc-immobilier-et-projets-neufs\/?$/i.test(href)) continue;
-
-      const teaser = parseRetraitesProjectTeaser(match?.[2] || '', href);
-      if (!teaser?.url || seen.has(teaser.url)) continue;
-      seen.add(teaser.url);
-
-      if (!matchesProjectToTargetAreas(teaser, targetAreaSet)) continue;
-
-      out.push(teaser);
-    }
-  } catch (err) {
-    console.error(`WARN retraites-populaires projets: ${err.message}`);
-  }
-
-  return out;
-}
-
 async function fetchFlatfoxListingById(sourceId, fallbackAreaLabel = '') {
   if (!sourceId) return null;
 
@@ -2606,7 +2499,6 @@ function makeDefaultConfig(profile, base = null) {
       naef: true,
       bernardNicod: true,
       retraitesListings: true,
-      retraitesProjets: true,
       anibis: false
     },
     flatfox: { maxPagesPerArea: 3, recheckKnownIdsLimit: 20 },
@@ -2642,7 +2534,6 @@ function makeDefaultConfig(profile, base = null) {
     naef: template.sources?.naef !== false,
     bernardNicod: template.sources?.bernardNicod !== false,
     retraitesListings: template.sources?.retraitesListings !== false,
-    retraitesProjets: template.sources?.retraitesProjets !== false,
     anibis: !!template.sources?.anibis
   };
   template.flatfox = {
@@ -2725,112 +2616,7 @@ async function bootstrapProfileData(profile) {
   }
 }
 
-async function mainProjets() {
-  const dataDir = path.join(PROFILES_DATA_DIR, 'projets');
-  await fs.mkdir(dataDir, { recursive: true });
-  const trackerPath = path.join(dataDir, 'tracker.json');
-  const latestPath = path.join(dataDir, 'latest-listings.json');
-
-  const tracker = await readJsonSafe(trackerPath, {
-    createdAt: new Date().toISOString(),
-    statuses: STATUSES,
-    listings: []
-  });
-
-  // Scrape ALL RP projects without area filter
-  const scraped = await scrapeRetraitesPopulairesProjects({ areas: [] });
-  const now = new Date().toISOString();
-  const scrapedMap = new Map(scraped.map((x) => [String(x.id), x]));
-
-  const merged = [];
-  const prevIds = new Set((tracker.listings || []).map((x) => String(x.id)));
-
-  // Update existing + add new
-  for (const item of scraped) {
-    const existing = (tracker.listings || []).find((x) => String(x.id) === String(item.id));
-    if (existing) {
-      merged.push({
-        ...existing,
-        ...item,
-        status: existing.status || 'À contacter',
-        notes: existing.notes || '',
-        pinned: !!existing.pinned,
-        firstSeenAt: existing.firstSeenAt || now,
-        lastSeenAt: now,
-        active: true,
-        isRemoved: false,
-        removedAt: null,
-        missingCount: 0,
-        isNew: false,
-        display: true
-      });
-    } else {
-      merged.push({
-        ...item,
-        status: 'À contacter',
-        notes: '',
-        pinned: false,
-        firstSeenAt: now,
-        lastSeenAt: now,
-        active: true,
-        isRemoved: false,
-        removedAt: null,
-        missingCount: 0,
-        isNew: !prevIds.has(String(item.id)),
-        display: true
-      });
-    }
-  }
-
-  // Mark removed projects
-  for (const old of tracker.listings || []) {
-    if (!scrapedMap.has(String(old.id))) {
-      merged.push({
-        ...old,
-        active: false,
-        isRemoved: true,
-        removedAt: old.removedAt || now,
-        missingCount: (old.missingCount || 0) + 1,
-        isNew: false
-      });
-    }
-  }
-
-  tracker.listings = merged;
-  const activeProjects = merged.filter((x) => x.active);
-  const newProjects = merged.filter((x) => x.isNew);
-
-  const latest = {
-    all: activeProjects,
-    matching: activeProjects,
-    totalCount: activeProjects.length,
-    matchingCount: activeProjects.length,
-    newCount: newProjects.length,
-    newListings: newProjects,
-    removedCount: merged.filter((x) => x.isRemoved).length,
-    generatedAt: now
-  };
-
-  await fs.writeFile(trackerPath, JSON.stringify(tracker, null, 2));
-  await fs.writeFile(latestPath, JSON.stringify(latest, null, 2));
-
-  console.log(`Scan projets terminé: ${activeProjects.length} projets actifs`);
-  console.log(`Nouveaux projets: ${newProjects.length}`);
-  if (activeProjects.length) {
-    console.log('Projets:');
-    for (const p of activeProjects) {
-      console.log(`- ${p.title} · ${p.area} · ${p.url}`);
-    }
-  }
-
-  return latest;
-}
-
 async function main() {
-  if (PROFILE === 'projets') {
-    return mainProjets();
-  }
-
   await bootstrapProfileData(PROFILE);
 
   const config = await readJsonSafe(CONFIG_PATH, null);
@@ -2847,7 +2633,6 @@ async function main() {
     if (typeof config.sources.naef !== 'boolean') config.sources.naef = true;
     if (typeof config.sources.bernardNicod !== 'boolean') config.sources.bernardNicod = true;
     if (typeof config.sources.retraitesListings !== 'boolean') config.sources.retraitesListings = true;
-    if (typeof config.sources.retraitesProjets !== 'boolean') config.sources.retraitesProjets = true;
     if (typeof config.sources.anibis !== 'boolean') config.sources.anibis = false;
   }
 
@@ -2947,9 +2732,6 @@ async function main() {
     const rpListings = await scrapeRetraitesPopulairesListings(config);
     scraped.push(...rpListings);
   }
-
-  // Projects are now scraped separately via --profile=projets
-  // (dedicated "Projets neufs" tab in the dashboard)
 
   if (config.sources?.anibis !== false) {
     const anibisItems = await scrapeAnibisListings(config);
