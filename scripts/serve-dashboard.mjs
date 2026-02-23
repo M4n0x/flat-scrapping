@@ -287,7 +287,7 @@ async function listProfiles() {
         slug: entry.name,
         name: cfg.name || entry.name,
         shortTitle,
-        label: `Profil – ${shortTitle}`,
+        label: entry.name === 'projets' ? '🏗️ Projets neufs' : `Profil – ${shortTitle}`,
         areas,
         listingsCount,
         maxRent: cfg.filters?.maxTotalChf ?? null,

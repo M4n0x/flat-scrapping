@@ -2725,7 +2725,112 @@ async function bootstrapProfileData(profile) {
   }
 }
 
+async function mainProjets() {
+  const dataDir = path.join(PROFILES_DATA_DIR, 'projets');
+  await fs.mkdir(dataDir, { recursive: true });
+  const trackerPath = path.join(dataDir, 'tracker.json');
+  const latestPath = path.join(dataDir, 'latest-listings.json');
+
+  const tracker = await readJsonSafe(trackerPath, {
+    createdAt: new Date().toISOString(),
+    statuses: STATUSES,
+    listings: []
+  });
+
+  // Scrape ALL RP projects without area filter
+  const scraped = await scrapeRetraitesPopulairesProjects({ areas: [] });
+  const now = new Date().toISOString();
+  const scrapedMap = new Map(scraped.map((x) => [String(x.id), x]));
+
+  const merged = [];
+  const prevIds = new Set((tracker.listings || []).map((x) => String(x.id)));
+
+  // Update existing + add new
+  for (const item of scraped) {
+    const existing = (tracker.listings || []).find((x) => String(x.id) === String(item.id));
+    if (existing) {
+      merged.push({
+        ...existing,
+        ...item,
+        status: existing.status || 'À contacter',
+        notes: existing.notes || '',
+        pinned: !!existing.pinned,
+        firstSeenAt: existing.firstSeenAt || now,
+        lastSeenAt: now,
+        active: true,
+        isRemoved: false,
+        removedAt: null,
+        missingCount: 0,
+        isNew: false,
+        display: true
+      });
+    } else {
+      merged.push({
+        ...item,
+        status: 'À contacter',
+        notes: '',
+        pinned: false,
+        firstSeenAt: now,
+        lastSeenAt: now,
+        active: true,
+        isRemoved: false,
+        removedAt: null,
+        missingCount: 0,
+        isNew: !prevIds.has(String(item.id)),
+        display: true
+      });
+    }
+  }
+
+  // Mark removed projects
+  for (const old of tracker.listings || []) {
+    if (!scrapedMap.has(String(old.id))) {
+      merged.push({
+        ...old,
+        active: false,
+        isRemoved: true,
+        removedAt: old.removedAt || now,
+        missingCount: (old.missingCount || 0) + 1,
+        isNew: false
+      });
+    }
+  }
+
+  tracker.listings = merged;
+  const activeProjects = merged.filter((x) => x.active);
+  const newProjects = merged.filter((x) => x.isNew);
+
+  const latest = {
+    all: activeProjects,
+    matching: activeProjects,
+    totalCount: activeProjects.length,
+    matchingCount: activeProjects.length,
+    newCount: newProjects.length,
+    newListings: newProjects,
+    removedCount: merged.filter((x) => x.isRemoved).length,
+    generatedAt: now
+  };
+
+  await fs.writeFile(trackerPath, JSON.stringify(tracker, null, 2));
+  await fs.writeFile(latestPath, JSON.stringify(latest, null, 2));
+
+  console.log(`Scan projets terminé: ${activeProjects.length} projets actifs`);
+  console.log(`Nouveaux projets: ${newProjects.length}`);
+  if (activeProjects.length) {
+    console.log('Projets:');
+    for (const p of activeProjects) {
+      console.log(`- ${p.title} · ${p.area} · ${p.url}`);
+    }
+  }
+
+  return latest;
+}
+
 async function main() {
+  if (PROFILE === 'projets') {
+    return mainProjets();
+  }
+
   await bootstrapProfileData(PROFILE);
 
   const config = await readJsonSafe(CONFIG_PATH, null);
@@ -2843,10 +2948,8 @@ async function main() {
     scraped.push(...rpListings);
   }
 
-  if (config.sources?.retraitesProjets !== false) {
-    const rpProjectItems = await scrapeRetraitesPopulairesProjects(config);
-    scraped.push(...rpProjectItems);
-  }
+  // Projects are now scraped separately via --profile=projets
+  // (dedicated "Projets neufs" tab in the dashboard)
 
   if (config.sources?.anibis !== false) {
     const anibisItems = await scrapeAnibisListings(config);
