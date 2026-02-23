@@ -2431,6 +2431,7 @@ function listingQualityRank(item, trackerMap) {
 function dedupeCrossSourceListings(items = [], trackerMap) {
   const byKey = new Map();
   const passthrough = [];
+  const removedIds = new Set();
 
   for (const item of items) {
     const key = buildCrossSourceDedupKey(item);
@@ -2446,6 +2447,7 @@ function dedupeCrossSourceListings(items = [], trackerMap) {
     }
 
     const keepIncoming = listingQualityRank(item, trackerMap) > listingQualityRank(existing, trackerMap);
+    const loser = keepIncoming ? existing : item;
     const winner = keepIncoming ? { ...item } : { ...existing };
 
     const combined = new Set([
@@ -2456,9 +2458,15 @@ function dedupeCrossSourceListings(items = [], trackerMap) {
 
     winner.duplicateSources = [...combined];
     byKey.set(key, winner);
+
+    // Track which IDs were deduped away so the merge loop can handle them
+    if (loser.id && String(loser.id) !== String(winner.id)) {
+      removedIds.add(String(loser.id));
+    }
   }
 
-  return [...byKey.values(), ...passthrough];
+  const kept = [...byKey.values(), ...passthrough];
+  return { kept, removedIds };
 }
 
 function toMap(list = []) {
@@ -2817,7 +2825,7 @@ async function main() {
     }
   }
 
-  const crossSourceDeduped = dedupeCrossSourceListings([...dedupById.values()], trackerMap);
+  const { kept: crossSourceDeduped, removedIds: crossSourceRemovedIds } = dedupeCrossSourceListings([...dedupById.values()], trackerMap);
   const dedup = new Map(crossSourceDeduped.map((item) => [String(item.id), item]));
   const activeDedupKeys = new Set(
     crossSourceDeduped
@@ -2990,6 +2998,23 @@ async function main() {
 
   for (const old of tracker.listings || []) {
     if (!dedup.has(String(old.id))) {
+      // If this listing was explicitly removed by cross-source dedup (enriched data
+      // matched another active listing), mark it as a duplicate — not as "missing".
+      if (crossSourceRemovedIds.has(String(old.id))) {
+        merged.push({
+          ...old,
+          status: normalizeStatus(old.status),
+          active: false,
+          isRemoved: true,
+          removedAt: old.removedAt || now,
+          missingCount: 0,
+          isNew: false,
+          display: false,
+          filterReason: 'Doublon inter-source (dedup enrichie)'
+        });
+        continue;
+      }
+
       const nextMissing = Number(old.missingCount || 0) + 1;
 
       const outOfScopeListing = !isTargetAreaCity(old.area || '', targetAreaSet);
