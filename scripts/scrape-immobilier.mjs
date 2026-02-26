@@ -981,6 +981,25 @@ async function isListingUrlStillLive(url) {
   if (!url || typeof url !== 'string') return false;
 
   try {
+    // immobilier.ch SPA: HTML page always returns 200 even for removed listings.
+    // Use the JSON API instead — removed listings have isVisible:"false".
+    const immobilierMatch = url.match(/immobilier\.ch\/.*?(\d{6,})$/);
+    if (immobilierMatch) {
+      const objectId = immobilierMatch[1];
+      try {
+        const payload = await fetchJson(`https://www.immobilier.ch/api/objects/${objectId}?lang=fr`);
+        if (payload && String(payload.isVisible) === 'false') {
+          console.log(`INFO ${objectId}: immobilier.ch API reports isVisible=false → listing removed`);
+          return false;
+        }
+        return true;
+      } catch {
+        // API error (404, network) — treat as removed since we know the page
+        // shell persists even after removal
+        return false;
+      }
+    }
+
     const result = await fetchHtmlWithRedirects(url, 3);
     const code = Number(result.statusCode || 0);
     if (code >= 400) return false;
