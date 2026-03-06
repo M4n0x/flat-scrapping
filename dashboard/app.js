@@ -717,36 +717,36 @@ function createThumbCell(item) {
     return holder;
   }
 
-  const mainLink = document.createElement('a');
-  mainLink.href = item.url;
-  mainLink.target = '_blank';
-  mainLink.rel = 'noreferrer';
-
   const img = document.createElement('img');
   img.className = 'thumb';
   img.src = urls[0];
   img.loading = 'lazy';
   img.alt = `Aperçu ${item.objectType || item.title || 'annonce'}`;
-  mainLink.appendChild(img);
-  holder.appendChild(mainLink);
+  img.style.cursor = 'pointer';
+  img.addEventListener('click', () => lightbox.show(urls, 0));
+  holder.appendChild(img);
 
   if (urls.length > 1) {
     const strip = document.createElement('div');
     strip.className = 'thumb-strip';
 
-    for (const src of urls.slice(1, 4)) {
+    urls.slice(1, 4).forEach((src, i) => {
       const mini = document.createElement('img');
       mini.className = 'thumb-mini';
       mini.src = src;
       mini.loading = 'lazy';
       mini.alt = 'miniature';
+      mini.style.cursor = 'pointer';
+      mini.addEventListener('click', () => lightbox.show(urls, i + 1));
       strip.appendChild(mini);
-    }
+    });
 
     if (urls.length > 4) {
       const more = document.createElement('span');
       more.className = 'thumb-more';
       more.textContent = `+${urls.length - 4}`;
+      more.style.cursor = 'pointer';
+      more.addEventListener('click', () => lightbox.show(urls, 4));
       strip.appendChild(more);
     }
 
@@ -949,6 +949,12 @@ function renderKanban(listings) {
         </div>
       `;
 
+      const coverEl = kCard.querySelector('.k-cover');
+      if (coverEl && urls.length) {
+        coverEl.style.cursor = 'pointer';
+        coverEl.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); lightbox.show(urls, 0); });
+      }
+
       const bottom = kCard.querySelector('.k-bottom');
       const urgency = createUrgencyBadge(item);
       bottom.appendChild(urgency);
@@ -956,11 +962,13 @@ function renderKanban(listings) {
       if (urls.length > 1) {
         const mini = document.createElement('div');
         mini.className = 'k-mini-strip';
-        urls.slice(1, 4).forEach((src) => {
+        urls.slice(1, 4).forEach((src, i) => {
           const im = document.createElement('img');
           im.src = src;
           im.loading = 'lazy';
           im.alt = 'miniature';
+          im.style.cursor = 'pointer';
+          im.addEventListener('click', (e) => { e.stopPropagation(); lightbox.show(urls, i + 1); });
           mini.appendChild(im);
         });
         bottom.appendChild(mini);
@@ -1052,17 +1060,25 @@ function renderMobile(listings) {
       </div>
     `;
 
+    const mobileCover = card.querySelector('.mobile-cover');
+    if (mobileCover && urls.length) {
+      mobileCover.style.cursor = 'pointer';
+      mobileCover.addEventListener('click', () => lightbox.show(urls, 0));
+    }
+
     const urgency = createUrgencyBadge(item);
     card.querySelector('.mobile-urgency').appendChild(urgency);
 
     if (urls.length > 1) {
       const strip = document.createElement('div');
       strip.className = 'mobile-thumb-strip';
-      urls.slice(1, 5).forEach((src) => {
+      urls.slice(1, 5).forEach((src, i) => {
         const im = document.createElement('img');
         im.src = src;
         im.loading = 'lazy';
         im.alt = 'miniature';
+        im.style.cursor = 'pointer';
+        im.addEventListener('click', () => lightbox.show(urls, i + 1));
         strip.appendChild(im);
       });
       card.querySelector('.mobile-content').appendChild(strip);
@@ -1214,4 +1230,80 @@ scanBtn.addEventListener('click', async () => {
 });
 
 initViewTabs();
+
+// ── Lightbox ──
+
+const lightbox = (() => {
+  let urls = [];
+  let idx = 0;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'lightbox-overlay';
+  overlay.innerHTML = `
+    <button class="lightbox-close" aria-label="Fermer">&times;</button>
+    <button class="lightbox-nav lightbox-prev" aria-label="Précédent">&#8249;</button>
+    <img class="lightbox-img" src="" alt="Photo annonce" />
+    <button class="lightbox-nav lightbox-next" aria-label="Suivant">&#8250;</button>
+    <div class="lightbox-strip"></div>
+    <div class="lightbox-counter"></div>
+  `;
+  document.body.appendChild(overlay);
+
+  const imgEl = overlay.querySelector('.lightbox-img');
+  const counterEl = overlay.querySelector('.lightbox-counter');
+  const stripEl = overlay.querySelector('.lightbox-strip');
+  const prevBtn = overlay.querySelector('.lightbox-prev');
+  const nextBtn = overlay.querySelector('.lightbox-next');
+  const closeBtn = overlay.querySelector('.lightbox-close');
+
+  function show(imageUrls, startIdx = 0) {
+    urls = imageUrls || [];
+    idx = startIdx;
+    update();
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function hide() {
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  function update() {
+    if (!urls.length) return;
+    idx = ((idx % urls.length) + urls.length) % urls.length;
+    imgEl.src = urls[idx];
+    counterEl.textContent = `${idx + 1} / ${urls.length}`;
+    prevBtn.style.display = urls.length > 1 ? '' : 'none';
+    nextBtn.style.display = urls.length > 1 ? '' : 'none';
+
+    stripEl.innerHTML = '';
+    if (urls.length > 1) {
+      urls.forEach((src, i) => {
+        const thumb = document.createElement('img');
+        thumb.src = src;
+        thumb.alt = `Photo ${i + 1}`;
+        if (i === idx) thumb.classList.add('active');
+        thumb.addEventListener('click', (e) => { e.stopPropagation(); idx = i; update(); });
+        stripEl.appendChild(thumb);
+      });
+    }
+  }
+
+  closeBtn.addEventListener('click', hide);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) hide(); });
+  prevBtn.addEventListener('click', (e) => { e.stopPropagation(); idx--; update(); });
+  nextBtn.addEventListener('click', (e) => { e.stopPropagation(); idx++; update(); });
+  imgEl.addEventListener('click', (e) => e.stopPropagation());
+
+  document.addEventListener('keydown', (e) => {
+    if (!overlay.classList.contains('open')) return;
+    if (e.key === 'Escape') hide();
+    else if (e.key === 'ArrowLeft') { idx--; update(); }
+    else if (e.key === 'ArrowRight') { idx++; update(); }
+  });
+
+  return { show, hide };
+})();
+
 load();
