@@ -28,6 +28,7 @@ const mapModeDetailsEl = document.getElementById('map-mode-details');
 const HOME_VIEW_STORAGE_KEY = 'apartment-home:view';
 const MAP_MODE_STORAGE_KEY = 'apartment-map:mode';
 const MAP_VISIBLE_PROFILES_KEY = 'apartment-map:visible-profiles';
+const MAP_KNOWN_PROFILES_KEY = 'apartment-map:known-profiles';
 
 let zones = [];
 let allProfiles = [];
@@ -475,16 +476,42 @@ async function loadProfiles() {
 }
 
 function loadVisibleProfileSlugs(profiles) {
+  const currentSlugs = profiles.map((p) => p.slug);
+  const currentSet = new Set(currentSlugs);
   const saved = localStorage.getItem(MAP_VISIBLE_PROFILES_KEY);
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) return new Set(parsed);
-    } catch {
-      return new Set(profiles.map((p) => p.slug));
-    }
+  if (!saved) {
+    localStorage.setItem(MAP_KNOWN_PROFILES_KEY, JSON.stringify(currentSlugs));
+    return new Set(currentSlugs);
   }
-  return new Set(profiles.map((p) => p.slug));
+
+  try {
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed)) throw new Error('Invalid visible profile filters');
+
+    const savedSet = new Set(parsed.filter((slug) => currentSet.has(slug)));
+    let knownSlugs = [];
+    const savedKnown = localStorage.getItem(MAP_KNOWN_PROFILES_KEY);
+    if (savedKnown) {
+      const parsedKnown = JSON.parse(savedKnown);
+      if (Array.isArray(parsedKnown)) knownSlugs = parsedKnown;
+    } else if (mapPayload?.profiles) {
+      knownSlugs = mapPayload.profiles.map((p) => p.slug);
+    }
+
+    const knownSet = new Set(knownSlugs.length ? knownSlugs : currentSlugs);
+    for (const slug of currentSlugs) {
+      if (!knownSet.has(slug)) savedSet.add(slug);
+    }
+
+    const reconciled = currentSlugs.filter((slug) => savedSet.has(slug));
+    localStorage.setItem(MAP_VISIBLE_PROFILES_KEY, JSON.stringify(reconciled));
+    localStorage.setItem(MAP_KNOWN_PROFILES_KEY, JSON.stringify(currentSlugs));
+    return new Set(reconciled);
+  } catch {
+    localStorage.setItem(MAP_VISIBLE_PROFILES_KEY, JSON.stringify(currentSlugs));
+    localStorage.setItem(MAP_KNOWN_PROFILES_KEY, JSON.stringify(currentSlugs));
+    return new Set(currentSlugs);
+  }
 }
 
 function saveVisibleProfileSlugs() {
@@ -618,8 +645,9 @@ async function loadMapData() {
   try {
     const res = await fetch('/api/map-listings');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    mapPayload = await res.json();
-    visibleProfileSlugs = loadVisibleProfileSlugs(mapPayload.profiles || []);
+    const nextPayload = await res.json();
+    visibleProfileSlugs = loadVisibleProfileSlugs(nextPayload.profiles || []);
+    mapPayload = nextPayload;
     renderMapFilters();
     if (!ensureMapInstance()) return;
     renderMapMarkers(true);
