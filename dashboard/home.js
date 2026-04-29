@@ -1,3 +1,5 @@
+import { formatMarkerDetails, popupHtml } from './map-utils.js';
+
 const gridEl = document.getElementById('profiles-grid');
 const createSection = document.getElementById('create-section');
 const formEl = document.getElementById('profile-form');
@@ -12,11 +14,31 @@ const workplaceEl = document.getElementById('f-workplace');
 const workplaceSuggestionsEl = document.getElementById('workplace-suggestions');
 const pearlEnabledEl = document.getElementById('f-pearl-enabled');
 const pearlOptionsEl = document.getElementById('pearl-options');
+const homeTabProfilesEl = document.getElementById('home-tab-profiles');
+const homeTabMapEl = document.getElementById('home-tab-map');
+const homePanelProfilesEl = document.getElementById('home-panel-profiles');
+const homePanelMapEl = document.getElementById('home-panel-map');
+const mapRefreshBtn = document.getElementById('map-refresh');
+const mapProfileFiltersEl = document.getElementById('map-profile-filters');
+const mapStatusEl = document.getElementById('map-status');
+const mapEmptyEl = document.getElementById('map-empty');
+const mapModePointsEl = document.getElementById('map-mode-points');
+const mapModeDetailsEl = document.getElementById('map-mode-details');
+
+const HOME_VIEW_STORAGE_KEY = 'apartment-home:view';
+const MAP_MODE_STORAGE_KEY = 'apartment-map:mode';
+const MAP_VISIBLE_PROFILES_KEY = 'apartment-map:visible-profiles';
 
 let zones = [];
 let allProfiles = [];
 let suggestAbort = null;
 let activeIndex = -1;
+let mapInstance = null;
+let mapLayer = null;
+let mapPayload = null;
+let mapLoaded = false;
+let mapMode = localStorage.getItem(MAP_MODE_STORAGE_KEY) === 'details' ? 'details' : 'points';
+let visibleProfileSlugs = new Set();
 
 // --- Canton mapping ---
 
@@ -263,6 +285,23 @@ function hideForm() {
   zoneSuggestionsEl.classList.add('hidden');
 }
 
+function setHomeView(view, persist = true) {
+  const mapActive = view === 'map';
+  homeTabProfilesEl?.classList.toggle('active', !mapActive);
+  homeTabMapEl?.classList.toggle('active', mapActive);
+  homePanelProfilesEl?.classList.toggle('active', !mapActive);
+  homePanelMapEl?.classList.toggle('active', mapActive);
+
+  if (persist) localStorage.setItem(HOME_VIEW_STORAGE_KEY, mapActive ? 'map' : 'profiles');
+  if (mapActive) {
+    ensureMapLoaded();
+    setTimeout(() => mapInstance?.invalidateSize(), 0);
+  }
+}
+
+homeTabProfilesEl?.addEventListener('click', () => setHomeView('profiles'));
+homeTabMapEl?.addEventListener('click', () => setHomeView('map'));
+
 formCancelEl.addEventListener('click', hideForm);
 
 formEl.addEventListener('submit', async (e) => {
@@ -433,6 +472,170 @@ async function loadProfiles() {
   }
 }
 
+function loadVisibleProfileSlugs(profiles) {
+  const saved = localStorage.getItem(MAP_VISIBLE_PROFILES_KEY);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return new Set(parsed);
+    } catch {
+      return new Set(profiles.map((p) => p.slug));
+    }
+  }
+  return new Set(profiles.map((p) => p.slug));
+}
+
+function saveVisibleProfileSlugs() {
+  localStorage.setItem(MAP_VISIBLE_PROFILES_KEY, JSON.stringify([...visibleProfileSlugs]));
+}
+
+function setMapMode(nextMode) {
+  mapMode = nextMode === 'details' ? 'details' : 'points';
+  localStorage.setItem(MAP_MODE_STORAGE_KEY, mapMode);
+  mapModePointsEl?.classList.toggle('active', mapMode === 'points');
+  mapModeDetailsEl?.classList.toggle('active', mapMode === 'details');
+  renderMapMarkers(false);
+}
+
+function ensureLeaflet() {
+  return window.L && typeof window.L.map === 'function';
+}
+
+function ensureMapInstance() {
+  if (mapInstance) return true;
+  if (!ensureLeaflet()) {
+    mapStatusEl.textContent = 'Impossible de charger la carte. Vérifiez la connexion réseau.';
+    return false;
+  }
+
+  mapInstance = window.L.map('global-map', {
+    scrollWheelZoom: true
+  }).setView([46.8, 8.2], 8);
+
+  window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(mapInstance);
+
+  mapLayer = window.L.layerGroup().addTo(mapInstance);
+  return true;
+}
+
+function createMapIcon(item) {
+  const color = item.profileColor || '#56d4b8';
+  if (mapMode === 'details') {
+    const html = `<div class="map-detail-marker" style="background:${escapeHtml(color)}">${escapeHtml(formatMarkerDetails(item))}</div>`;
+    return window.L.divIcon({
+      className: 'map-marker-wrap',
+      html,
+      iconSize: null,
+      iconAnchor: [18, 16],
+      popupAnchor: [0, -14]
+    });
+  }
+
+  return window.L.divIcon({
+    className: 'map-marker-wrap',
+    html: `<div class="map-dot-marker" style="background:${escapeHtml(color)}"></div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -9]
+  });
+}
+
+function renderMapFilters() {
+  if (!mapPayload) return;
+  mapProfileFiltersEl.innerHTML = '';
+
+  for (const profile of mapPayload.profiles) {
+    const label = document.createElement('label');
+    label.className = 'map-profile-filter';
+    label.innerHTML = `
+      <input type="checkbox" value="${escapeHtml(profile.slug)}" ${visibleProfileSlugs.has(profile.slug) ? 'checked' : ''} />
+      <span class="map-profile-swatch" style="background:${escapeHtml(profile.color)}"></span>
+      <span>${escapeHtml(profile.title)}</span>
+      <span class="map-profile-count">${profile.mappedCount}/${profile.totalActiveDisplayed}</span>
+    `;
+
+    label.querySelector('input').addEventListener('change', (event) => {
+      if (event.currentTarget.checked) visibleProfileSlugs.add(profile.slug);
+      else visibleProfileSlugs.delete(profile.slug);
+      saveVisibleProfileSlugs();
+      renderMapMarkers(true);
+    });
+
+    mapProfileFiltersEl.appendChild(label);
+  }
+}
+
+function renderMapMarkers(fitBounds = true) {
+  if (!mapPayload || !ensureMapInstance()) return;
+
+  mapLayer.clearLayers();
+  const visible = mapPayload.listings.filter((item) => visibleProfileSlugs.has(item.profileSlug));
+  const bounds = [];
+
+  for (const item of visible) {
+    const marker = window.L.marker([item.lat, item.lon], { icon: createMapIcon(item) });
+    marker.bindPopup(popupHtml(item));
+    marker.addTo(mapLayer);
+    bounds.push([item.lat, item.lon]);
+  }
+
+  const totalVisible = visible.length;
+  const missing = mapPayload.profiles
+    .filter((p) => visibleProfileSlugs.has(p.slug))
+    .reduce((sum, p) => sum + Number(p.missingCoordinates || 0), 0);
+
+  mapStatusEl.textContent = `${totalVisible} annonces visibles sur la carte · ${missing} sans coordonnées`;
+
+  if (mapEmptyEl) {
+    if (!totalVisible) {
+      mapEmptyEl.textContent = mapPayload.totals.activeDisplayed > 0
+        ? 'Aucune annonce avec coordonnées pour les profils sélectionnés. Les coordonnées seront complétées après le prochain scan ou recalcul des distances.'
+        : 'Aucune annonce active à afficher.';
+      mapEmptyEl.classList.remove('hidden');
+    } else {
+      mapEmptyEl.classList.add('hidden');
+    }
+  }
+
+  if (fitBounds && bounds.length) {
+    mapInstance.fitBounds(bounds, { padding: [28, 28], maxZoom: 14 });
+  }
+}
+
+async function loadMapData() {
+  if (!mapStatusEl) return;
+  mapStatusEl.textContent = 'Chargement de la carte…';
+  try {
+    const res = await fetch('/api/map-listings');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    mapPayload = await res.json();
+    visibleProfileSlugs = loadVisibleProfileSlugs(mapPayload.profiles || []);
+    renderMapFilters();
+    ensureMapInstance();
+    renderMapMarkers(true);
+    mapLoaded = true;
+  } catch (err) {
+    mapStatusEl.innerHTML = `Erreur carte: ${escapeHtml(err.message)} <button id="map-retry" class="save-inline" type="button">Réessayer</button>`;
+    document.getElementById('map-retry')?.addEventListener('click', loadMapData);
+  }
+}
+
+function ensureMapLoaded() {
+  if (mapLoaded) {
+    setTimeout(() => mapInstance?.invalidateSize(), 0);
+    return;
+  }
+  loadMapData();
+}
+
+mapRefreshBtn?.addEventListener('click', loadMapData);
+mapModePointsEl?.addEventListener('click', () => setMapMode('points'));
+mapModeDetailsEl?.addEventListener('click', () => setMapMode('details'));
+setMapMode(mapMode);
+
 // --- Scan all ---
 
 const scanAllBtn = document.getElementById('scan-all-btn');
@@ -497,6 +700,7 @@ function pollScanJob(jobId) {
         scanAllBtn.disabled = false;
         scanAllBtn.textContent = '🔄 Tout scanner';
         await loadProfiles();
+        if (mapLoaded) await loadMapData();
       }
     } catch {
       clearInterval(poll);
@@ -545,4 +749,8 @@ async function resumeScanIfNeeded() {
   }
 }
 
-loadProfiles().then(() => resumeScanIfNeeded());
+loadProfiles().then(() => {
+  const savedHomeView = localStorage.getItem(HOME_VIEW_STORAGE_KEY);
+  setHomeView(savedHomeView === 'map' ? 'map' : 'profiles', false);
+  resumeScanIfNeeded();
+});
