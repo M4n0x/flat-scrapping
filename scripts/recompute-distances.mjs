@@ -139,6 +139,9 @@ async function main() {
     listing.distanceText = `${listing.distanceKm} km`;
     listing.distanceComputed = true;
     listing.distanceFromWorkAddress = workAddress;
+    listing.mapLat = listingCoords.lat;
+    listing.mapLon = listingCoords.lon;
+    listing.mapAddress = addr + ', Suisse';
     listing.driveMinutes = driveMinutes;
     listing.driveText = driveMinutes ? `${driveMinutes} min` : '';
     listing.transitMinutes = transitMinutes;

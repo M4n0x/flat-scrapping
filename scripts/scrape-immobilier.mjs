@@ -940,6 +940,16 @@ async function computeDistanceFromWork(item, workCoords, geocodeCache) {
   };
 }
 
+function applyMapCoordinatesFromDistance(item, distanceMeta) {
+  const lat = Number(distanceMeta?.listingCoords?.lat);
+  const lon = Number(distanceMeta?.listingCoords?.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+  item.mapLat = lat;
+  item.mapLon = lon;
+  item.mapAddress = distanceMeta.listingAddress || buildListingAddressQuery(item);
+}
+
 function mergeNotesWithEntryDate(notes = '', moveInDate = null) {
   const current = String(notes || '');
 
@@ -2858,6 +2868,7 @@ async function main() {
       item.distanceText = distanceMeta.distanceText;
       item.distanceComputed = distanceMeta.computed;
       item.distanceFromWorkAddress = workAddress;
+      applyMapCoordinatesFromDistance(item, distanceMeta);
 
       const driveMinutes = await fetchDrivingMinutes(workCoords, distanceMeta.listingCoords, routeCache);
       const transitMinutes = await fetchTransitMinutes(workAddress, distanceMeta.listingAddress, routeCache);
@@ -2927,6 +2938,9 @@ async function main() {
         driveText,
         transitMinutes,
         transitText,
+        mapLat: item.mapLat ?? existing.mapLat ?? null,
+        mapLon: item.mapLon ?? existing.mapLon ?? null,
+        mapAddress: item.mapAddress || existing.mapAddress || '',
         publishedAt: item.publishedAt || existing.publishedAt || null,
         status: normalizeStatus(existing.status || 'À contacter'),
         notes: mergeNotesWithEntryDate(existing.notes || '', entryDateText),
@@ -2948,6 +2962,9 @@ async function main() {
         driveText: toDurationMinutesOrNull(item.driveMinutes) != null ? `${Math.round(toDurationMinutesOrNull(item.driveMinutes))} min` : '',
         transitMinutes: toDurationMinutesOrNull(item.transitMinutes),
         transitText: toDurationMinutesOrNull(item.transitMinutes) != null ? `${Math.round(toDurationMinutesOrNull(item.transitMinutes))} min` : '',
+        mapLat: item.mapLat ?? null,
+        mapLon: item.mapLon ?? null,
+        mapAddress: item.mapAddress || '',
         publishedAt: item.publishedAt || null,
         status: 'À contacter',
         notes: mergeNotesWithEntryDate('', entryDateText),
@@ -3116,6 +3133,7 @@ async function main() {
         if (distanceMeta.computed) {
           distanceKm = distanceMeta.distanceKm;
           distanceText = distanceMeta.distanceText;
+          applyMapCoordinatesFromDistance(old, distanceMeta);
 
           if (driveMinutes == null) {
             driveMinutes = toDurationMinutesOrNull(await fetchDrivingMinutes(workCoords, distanceMeta.listingCoords, routeCache));
@@ -3136,6 +3154,9 @@ async function main() {
         driveText: driveMinutes != null ? `${Math.round(driveMinutes)} min` : sanitizeTravelText(old.driveText || ''),
         transitMinutes,
         transitText: transitMinutes != null ? `${Math.round(transitMinutes)} min` : sanitizeTravelText(old.transitText || ''),
+        mapLat: old.mapLat ?? null,
+        mapLon: old.mapLon ?? null,
+        mapAddress: old.mapAddress || '',
         distanceFromWorkAddress: old.distanceFromWorkAddress || workAddress,
         status: normalizeStatus(old.status),
         active: !shouldRemove,
