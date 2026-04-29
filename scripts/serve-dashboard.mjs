@@ -599,7 +599,7 @@ const server = http.createServer(async (req, res) => {
     return serveFile(res, path.join(DASHBOARD_DIR, relative));
   }
 
-  const profileAssetMatch = u.pathname.match(/^\/([a-z0-9-]+)\/(app\.js|styles\.css)$/i);
+  const profileAssetMatch = u.pathname.match(/^\/([a-z0-9-]+)\/(app\.js|styles\.css|map-utils\.js)$/i);
   if (req.method === 'GET' && profileAssetMatch) {
     return serveFile(res, path.join(DASHBOARD_DIR, profileAssetMatch[2]));
   }
