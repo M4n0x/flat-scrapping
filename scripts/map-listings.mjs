@@ -82,10 +82,10 @@ export function resolveListingCoordinates(item = {}, geocodeCache = {}) {
 }
 
 function isMapVisibleListing(item = {}) {
-  return item.active !== false
+  return item.active === true
     && item.display !== false
     && item.isRemoved !== true
-    && String(item.status || '') !== 'Refusé';
+    && String(item.status || '').trim() !== 'Refusé';
 }
 
 function compactListing(item, profile, coords) {

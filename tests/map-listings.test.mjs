@@ -108,6 +108,32 @@ test('buildMapListingsPayload includes only active displayed non-refused listing
           display: true,
           status: 'À contacter',
           address: 'Rue Missing 1, 1800 Vevey'
+        },
+        {
+          id: 'missing-active',
+          display: true,
+          status: 'À contacter',
+          mapLat: 46.48,
+          mapLon: 6.86,
+          address: 'Rue Missing Active 1, 1800 Vevey'
+        },
+        {
+          id: 'active-false-visible',
+          active: false,
+          display: true,
+          status: 'À contacter',
+          mapLat: 46.49,
+          mapLon: 6.87,
+          address: 'Rue Active False 1, 1800 Vevey'
+        },
+        {
+          id: 'refused-whitespace',
+          active: true,
+          display: true,
+          status: ' Refusé ',
+          mapLat: 46.5,
+          mapLon: 6.88,
+          address: 'Rue Refused Whitespace 1, 1800 Vevey'
         }
       ]
     });
@@ -130,6 +156,66 @@ test('buildMapListingsPayload includes only active displayed non-refused listing
       mapped: 1,
       missingCoordinates: 1
     });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('buildMapListingsPayload sorts profiles by slug and listings by profile then id', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'apartment-map-sort-'));
+  const profilesDir = path.join(root, 'profiles');
+
+  try {
+    await writeJson(path.join(profilesDir, 'zurich', 'watch-config.json'), {
+      shortTitle: 'Zurich'
+    });
+    await writeJson(path.join(profilesDir, 'zurich', 'tracker.json'), {
+      listings: [
+        {
+          id: 'b',
+          active: true,
+          display: true,
+          mapLat: 47.37,
+          mapLon: 8.54,
+          address: 'Rue B, Zurich'
+        },
+        {
+          id: 'a',
+          active: true,
+          display: true,
+          mapLat: 47.38,
+          mapLon: 8.55,
+          address: 'Rue A, Zurich'
+        }
+      ]
+    });
+
+    await writeJson(path.join(profilesDir, 'lausanne', 'watch-config.json'), {
+      shortTitle: 'Lausanne'
+    });
+    await writeJson(path.join(profilesDir, 'lausanne', 'tracker.json'), {
+      listings: [
+        {
+          id: 'c',
+          active: true,
+          display: true,
+          mapLat: 46.52,
+          mapLon: 6.63,
+          address: 'Rue C, Lausanne'
+        }
+      ]
+    });
+
+    const payload = await buildMapListingsPayload(profilesDir);
+
+    assert.deepEqual(
+      payload.profiles.map((profile) => profile.slug),
+      ['lausanne', 'zurich']
+    );
+    assert.deepEqual(
+      payload.listings.map((listing) => `${listing.profileSlug}:${listing.id}`),
+      ['lausanne:c', 'zurich:a', 'zurich:b']
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
