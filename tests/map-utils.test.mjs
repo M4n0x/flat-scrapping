@@ -46,7 +46,22 @@ test('popupHtml escapes listing content and keeps safe link attributes', () => {
   assert.match(html, /&lt;Flat&gt;/);
   assert.match(html, /Rue &amp; Lac/);
   assert.match(html, /target="_blank"/);
-  assert.match(html, /rel="noreferrer"/);
+  assert.match(html, /rel="noopener noreferrer"/);
+});
+
+test('popupHtml omits unsafe javascript links', () => {
+  const html = popupHtml({ url: 'javascript:alert(1)' });
+
+  assert.doesNotMatch(html, /<a /);
+  assert.doesNotMatch(html, /javascript:/);
+});
+
+test('popupHtml keeps valid https links with safe attributes', () => {
+  const html = popupHtml({ url: 'https://example.test/listing' });
+
+  assert.match(html, /href="https:\/\/example\.test\/listing"/);
+  assert.match(html, /target="_blank"/);
+  assert.match(html, /rel="noopener noreferrer"/);
 });
 
 test('escapeHtml handles quotes', () => {

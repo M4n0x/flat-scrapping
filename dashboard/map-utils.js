@@ -54,6 +54,18 @@ export function formatMarkerDetails(item = {}) {
   return `${moneyLabel(item.totalChf)} · ${roomsLabel(item.rooms)} · ${surfaceLabel(item.surfaceM2)}`;
 }
 
+function safePopupUrl(value) {
+  if (!value) return '';
+
+  try {
+    const url = new URL(String(value));
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.href;
+  } catch {
+    return '';
+  }
+}
+
 export function popupHtml(item = {}) {
   const title = item.title || item.address || 'Annonce';
   const meta = [
@@ -65,8 +77,9 @@ export function popupHtml(item = {}) {
   const source = item.source ? `<div class="map-popup-muted">${escapeHtml(item.source)}</div>` : '';
   const area = item.area ? `<div class="map-popup-muted">${escapeHtml(item.area)}</div>` : '';
   const address = item.address ? `<div>${escapeHtml(item.address)}</div>` : '';
-  const link = item.url
-    ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Ouvrir l'annonce</a>`
+  const url = safePopupUrl(item.url);
+  const link = url
+    ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Ouvrir l'annonce</a>`
     : '';
 
   return `
