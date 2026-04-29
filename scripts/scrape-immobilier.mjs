@@ -855,21 +855,30 @@ async function fetchTransitMinutes(workAddress, listingAddress, routeCache) {
 
 let lastGeocodeRequestAt = 0;
 
+function toFiniteCoordinate(value) {
+  if (value == null) return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function geocodeAddress(query, geocodeCache) {
   if (!query) return null;
 
   const key = query.toLowerCase();
   if (Object.prototype.hasOwnProperty.call(geocodeCache, key)) {
     const cached = geocodeCache[key];
-    if (cached && typeof cached === 'object' && Number.isFinite(Number(cached.lat)) && Number.isFinite(Number(cached.lon))) {
-      return { lat: Number(cached.lat), lon: Number(cached.lon) };
+    const lat = toFiniteCoordinate(cached?.lat);
+    const lon = toFiniteCoordinate(cached?.lon);
+    if (lat != null && lon != null) {
+      return { lat, lon };
     }
   }
 
   const parseLatLon = (latValue, lonValue) => {
-    const lat = Number(latValue);
-    const lon = Number(lonValue);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    const lat = toFiniteCoordinate(latValue);
+    const lon = toFiniteCoordinate(lonValue);
+    if (lat == null || lon == null) return null;
     return { lat, lon };
   };
 
@@ -941,9 +950,9 @@ async function computeDistanceFromWork(item, workCoords, geocodeCache) {
 }
 
 function applyMapCoordinatesFromDistance(item, distanceMeta) {
-  const lat = Number(distanceMeta?.listingCoords?.lat);
-  const lon = Number(distanceMeta?.listingCoords?.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  const lat = toFiniteCoordinate(distanceMeta?.listingCoords?.lat);
+  const lon = toFiniteCoordinate(distanceMeta?.listingCoords?.lon);
+  if (lat == null || lon == null) return;
 
   item.mapLat = lat;
   item.mapLon = lon;

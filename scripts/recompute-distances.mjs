@@ -54,9 +54,16 @@ function httpsGet(url) {
   });
 }
 
+function toFiniteCoordinate(value) {
+  if (value == null) return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function toFinitePoint(value) {
-  const lat = Number(value?.lat);
-  const lon = Number(value?.lon);
+  const lat = toFiniteCoordinate(value?.lat);
+  const lon = toFiniteCoordinate(value?.lon);
   return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
 }
 
