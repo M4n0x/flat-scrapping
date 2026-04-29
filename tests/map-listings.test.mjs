@@ -58,6 +58,69 @@ test('resolveListingCoordinates falls back to geocode cache address query', () =
   });
 });
 
+test('resolveListingCoordinates falls back when persisted map coordinates are blank or null', () => {
+  const geocodeCache = {
+    'rue du lac 4, 1800 vevey, suisse': { lat: 46.46, lon: 6.84 }
+  };
+
+  assert.deepEqual(
+    resolveListingCoordinates(
+      { mapLat: '', mapLon: null, address: 'Rue du Lac 4, 1800 Vevey' },
+      geocodeCache
+    ),
+    {
+      lat: 46.46,
+      lon: 6.84,
+      address: 'Rue du Lac 4, 1800 Vevey, Suisse'
+    }
+  );
+  assert.deepEqual(
+    resolveListingCoordinates(
+      { mapLat: '   ', mapLon: ' ', address: 'Rue du Lac 4, 1800 Vevey' },
+      geocodeCache
+    ),
+    {
+      lat: 46.46,
+      lon: 6.84,
+      address: 'Rue du Lac 4, 1800 Vevey, Suisse'
+    }
+  );
+});
+
+test('resolveListingCoordinates returns null for blank persisted coordinates without a valid cache point', () => {
+  assert.equal(
+    resolveListingCoordinates(
+      { mapLat: null, mapLon: '', address: 'Rue du Lac 4, 1800 Vevey' },
+      {}
+    ),
+    null
+  );
+  assert.equal(
+    resolveListingCoordinates(
+      { mapLat: ' ', mapLon: '   ', address: 'Rue du Lac 4, 1800 Vevey' },
+      { 'rue du lac 4, 1800 vevey, suisse': { lat: '', lon: null } }
+    ),
+    null
+  );
+});
+
+test('resolveListingCoordinates ignores blank and null geocode cache coordinates', () => {
+  assert.equal(
+    resolveListingCoordinates(
+      { address: 'Rue du Lac 4, 1800 Vevey' },
+      { 'rue du lac 4, 1800 vevey, suisse': { lat: '', lon: ' ' } }
+    ),
+    null
+  );
+  assert.equal(
+    resolveListingCoordinates(
+      { address: 'Rue du Lac 4, 1800 Vevey' },
+      { 'rue du lac 4, 1800 vevey, suisse': { lat: null, lon: 6.84 } }
+    ),
+    null
+  );
+});
+
 test('buildMapListingsPayload includes only active displayed non-refused listings with coordinates', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'apartment-map-'));
   const profilesDir = path.join(root, 'profiles');

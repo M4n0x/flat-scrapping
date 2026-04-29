@@ -33,6 +33,8 @@ async function readJsonSafe(filePath, fallback) {
 }
 
 function toNumberOrNull(value) {
+  if (value == null) return null;
+  if (typeof value === 'string' && !value.trim()) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
