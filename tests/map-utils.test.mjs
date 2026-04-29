@@ -64,7 +64,7 @@ test('popupHtml keeps valid https links with safe attributes', () => {
   assert.match(html, /rel="noopener noreferrer"/);
 });
 
-test('popupHtml renders a compact image carousel for listing images', () => {
+test('popupHtml renders a hero image carousel without thumbnails', () => {
   const html = popupHtml({
     title: 'Appartement',
     imageUrls: [
@@ -74,12 +74,16 @@ test('popupHtml renders a compact image carousel for listing images', () => {
   });
 
   assert.match(html, /class="map-popup-carousel"/);
-  assert.match(html, /class="map-popup-carousel-image"/);
+  assert.match(html, /class="map-popup-carousel-image map-popup-hero-image"/);
+  assert.match(html, /class="map-popup-close"/);
+  assert.match(html, /data-popup-close/);
   assert.match(html, /src="\/data\/profiles\/vevey\/images\/cover\.jpg"/);
   assert.match(html, /data-carousel-url="https:\/\/example\.test\/two\.jpg"/);
   assert.match(html, /data-carousel-prev/);
   assert.match(html, /data-carousel-next/);
   assert.match(html, /1 \/ 2/);
+  assert.doesNotMatch(html, /data-carousel-thumb/);
+  assert.doesNotMatch(html, /map-popup-carousel-thumbs/);
 });
 
 test('popupHtml omits unsafe image urls from the carousel', () => {

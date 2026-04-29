@@ -696,7 +696,7 @@ function renderMapMarkers(fitBounds = true) {
 
   for (const item of visible) {
     const marker = window.L.marker([item.lat, item.lon], { icon: createMapIcon(item) });
-    marker.bindPopup(popupHtml(item));
+    marker.bindPopup(popupHtml(item), { closeButton: false });
     marker.addTo(mapLayer);
     bounds.push([item.lat, item.lon]);
   }
@@ -727,45 +727,51 @@ function renderMapMarkers(fitBounds = true) {
 }
 
 function setPopupCarouselIndex(carousel, nextIndex) {
-  const thumbs = [...carousel.querySelectorAll('[data-carousel-thumb]')];
-  if (!thumbs.length) return;
+  const slides = [...carousel.querySelectorAll('[data-carousel-slide]')];
+  if (!slides.length) return;
 
-  const index = ((nextIndex % thumbs.length) + thumbs.length) % thumbs.length;
-  const activeThumb = thumbs[index];
+  const index = ((nextIndex % slides.length) + slides.length) % slides.length;
+  const activeSlide = slides[index];
   const image = carousel.querySelector('[data-carousel-current]');
   const counter = carousel.querySelector('[data-carousel-count]');
-  const src = activeThumb.dataset.carouselUrl || '';
+  const src = activeSlide.dataset.carouselUrl || '';
 
   carousel.dataset.carouselIndex = String(index);
-  thumbs.forEach((thumb, thumbIndex) => {
-    thumb.classList.toggle('active', thumbIndex === index);
-  });
   if (image && src) {
     image.src = src;
     image.alt = `Photo ${index + 1}`;
   }
   if (counter) {
-    counter.textContent = `${index + 1} / ${thumbs.length}`;
+    counter.textContent = `${index + 1} / ${slides.length}`;
   }
 }
 
 function handleMapCarouselClick(event) {
-  const control = event.target.closest('[data-carousel-prev], [data-carousel-next], [data-carousel-thumb]');
+  const control = event.target.closest('[data-popup-close], [data-carousel-prev], [data-carousel-next]');
   if (!control) return;
-
-  const carousel = control.closest('.map-popup-carousel');
-  if (!carousel) return;
 
   event.preventDefault();
   event.stopPropagation();
 
+  if (control.matches('[data-popup-close]')) {
+    mapInstance?.closePopup();
+    return;
+  }
+
+  const carousel = control.closest('.map-popup-carousel');
+  if (!carousel) return;
+
   const current = Number(carousel.dataset.carouselIndex || 0);
   if (control.matches('[data-carousel-prev]')) {
     setPopupCarouselIndex(carousel, current - 1);
-  } else if (control.matches('[data-carousel-next]')) {
-    setPopupCarouselIndex(carousel, current + 1);
   } else {
-    setPopupCarouselIndex(carousel, Number(control.dataset.carouselIndex || 0));
+    setPopupCarouselIndex(carousel, current + 1);
+  }
+}
+
+function handleMapPopupKeydown(event) {
+  if (event.key === 'Escape') {
+    mapInstance?.closePopup();
   }
 }
 
@@ -802,6 +808,7 @@ mapRefreshBtn?.addEventListener('click', loadMapData);
 mapModePointsEl?.addEventListener('click', () => setMapMode('points'));
 mapModeDetailsEl?.addEventListener('click', () => setMapMode('details'));
 document.getElementById('global-map')?.addEventListener('click', handleMapCarouselClick);
+document.addEventListener('keydown', handleMapPopupKeydown);
 setMapMode(mapMode);
 
 // --- Scan all ---

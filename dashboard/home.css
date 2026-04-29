@@ -735,8 +735,9 @@ label.checkbox input[type="checkbox"] {
   display: grid;
   gap: 6px;
   color: #102129;
-  width: min(270px, 72vw);
-  min-width: 210px;
+  position: relative;
+  width: min(360px, 82vw);
+  min-width: 240px;
 }
 
 .map-popup-profile,
@@ -755,7 +756,7 @@ label.checkbox input[type="checkbox"] {
   overflow: hidden;
   border-radius: 8px;
   background: #dfe8ea;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
 }
 
 .map-popup-carousel-image {
@@ -763,6 +764,23 @@ label.checkbox input[type="checkbox"] {
   height: 100%;
   display: block;
   object-fit: cover;
+}
+
+.map-popup-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(7, 23, 32, 0.78);
+  color: white;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .map-popup-carousel-nav {
@@ -797,36 +815,6 @@ label.checkbox input[type="checkbox"] {
   padding: 3px 7px;
   font-size: 0.7rem;
   font-weight: 700;
-}
-
-.map-popup-carousel-thumbs {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 38px;
-  gap: 5px;
-  overflow-x: auto;
-}
-
-.map-popup-carousel-thumb {
-  width: 38px;
-  height: 32px;
-  border: 2px solid transparent;
-  border-radius: 6px;
-  padding: 0;
-  background: transparent;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.map-popup-carousel-thumb.active {
-  border-color: #102129;
-}
-
-.map-popup-carousel-thumb img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
 }
 
 @media (max-width: 760px) {

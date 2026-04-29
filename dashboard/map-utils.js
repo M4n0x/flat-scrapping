@@ -94,10 +94,8 @@ function popupCarouselHtml(item = {}) {
   if (!imageUrls.length) return '';
 
   const title = item.title || item.address || 'annonce';
-  const thumbs = imageUrls.map((src, index) => `
-    <button class="map-popup-carousel-thumb ${index === 0 ? 'active' : ''}" type="button" data-carousel-thumb data-carousel-index="${index}" data-carousel-url="${escapeHtml(src)}" aria-label="Photo ${index + 1}">
-      <img src="${escapeHtml(src)}" alt="Photo ${index + 1}" loading="lazy" />
-    </button>
+  const slides = imageUrls.map((src, index) => `
+    <span hidden data-carousel-slide data-carousel-index="${index}" data-carousel-url="${escapeHtml(src)}"></span>
   `).join('');
   const controls = imageUrls.length > 1
     ? `
@@ -112,11 +110,12 @@ function popupCarouselHtml(item = {}) {
   return `
     <div class="map-popup-carousel" data-carousel-index="0">
       <div class="map-popup-carousel-main">
-        <img class="map-popup-carousel-image" data-carousel-current src="${escapeHtml(imageUrls[0])}" alt="Photo ${escapeHtml(title)}" loading="lazy" />
+        <img class="map-popup-carousel-image map-popup-hero-image" data-carousel-current src="${escapeHtml(imageUrls[0])}" alt="Photo ${escapeHtml(title)}" loading="lazy" />
+        <button class="map-popup-close" type="button" data-popup-close aria-label="Fermer">×</button>
         ${controls}
         ${counter}
       </div>
-      ${imageUrls.length > 1 ? `<div class="map-popup-carousel-thumbs">${thumbs}</div>` : ''}
+      ${slides}
     </div>
   `;
 }
