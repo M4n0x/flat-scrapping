@@ -32,6 +32,7 @@ const MAP_KNOWN_PROFILES_KEY = 'apartment-map:known-profiles';
 const LEAFLET_JS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
 const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 const LEAFLET_RETRY_SCRIPT_ID = 'leaflet-retry-script';
+const LEAFLET_RETRY_CSS_ID = 'leaflet-retry-css';
 
 let zones = [];
 let allProfiles = [];
@@ -44,6 +45,7 @@ let mapLoaded = false;
 let mapMode = localStorage.getItem(MAP_MODE_STORAGE_KEY) === 'details' ? 'details' : 'points';
 let visibleProfileSlugs = new Set();
 let leafletAssetPromise = null;
+let leafletCssPromise = null;
 
 // --- Canton mapping ---
 
@@ -534,21 +536,44 @@ function ensureLeaflet() {
   return window.L && typeof window.L.map === 'function';
 }
 
-function ensureLeafletCss() {
-  if (document.querySelector(`link[href="${LEAFLET_CSS_URL}"]`)) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = LEAFLET_CSS_URL;
-  link.crossOrigin = '';
-  document.head.appendChild(link);
+function hasLoadedLeafletCss() {
+  return [...document.querySelectorAll('link[rel~="stylesheet"]')].some((link) => {
+    const href = String(link.href || '').split('?')[0];
+    return href === LEAFLET_CSS_URL && Boolean(link.sheet);
+  });
 }
 
-function loadLeafletAssets() {
-  if (ensureLeaflet()) return Promise.resolve();
-  ensureLeafletCss();
-  if (leafletAssetPromise) return leafletAssetPromise;
+function loadLeafletCss() {
+  if (hasLoadedLeafletCss()) return Promise.resolve();
+  if (leafletCssPromise) return leafletCssPromise;
 
-  leafletAssetPromise = new Promise((resolve, reject) => {
+  leafletCssPromise = new Promise((resolve, reject) => {
+    document.getElementById(LEAFLET_RETRY_CSS_ID)?.remove();
+
+    const link = document.createElement('link');
+    link.id = LEAFLET_RETRY_CSS_ID;
+    link.rel = 'stylesheet';
+    link.href = `${LEAFLET_CSS_URL}?retry=${Date.now()}`;
+    link.crossOrigin = '';
+    link.onload = () => {
+      leafletCssPromise = null;
+      resolve();
+    };
+    link.onerror = () => {
+      leafletCssPromise = null;
+      link.remove();
+      reject(new Error('Impossible de charger les styles de la carte. Vérifiez la connexion réseau.'));
+    };
+    document.head.appendChild(link);
+  });
+
+  return leafletCssPromise;
+}
+
+function loadLeafletScript() {
+  if (ensureLeaflet()) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
     document.getElementById(LEAFLET_RETRY_SCRIPT_ID)?.remove();
 
     const script = document.createElement('script');
@@ -557,7 +582,6 @@ function loadLeafletAssets() {
     script.crossOrigin = '';
     script.async = true;
     script.onload = () => {
-      leafletAssetPromise = null;
       if (ensureLeaflet()) {
         resolve();
       } else {
@@ -565,12 +589,26 @@ function loadLeafletAssets() {
       }
     };
     script.onerror = () => {
-      leafletAssetPromise = null;
       script.remove();
       reject(new Error('Impossible de charger Leaflet. Vérifiez la connexion réseau.'));
     };
     document.head.appendChild(script);
   });
+}
+
+function loadLeafletAssets() {
+  if (ensureLeaflet() && hasLoadedLeafletCss()) return Promise.resolve();
+  if (leafletAssetPromise) return leafletAssetPromise;
+
+  leafletAssetPromise = Promise.all([loadLeafletCss(), loadLeafletScript()])
+    .then(() => {
+      if (!ensureLeaflet()) {
+        throw new Error('Leaflet indisponible après le chargement.');
+      }
+    })
+    .finally(() => {
+      leafletAssetPromise = null;
+    });
 
   return leafletAssetPromise;
 }

@@ -121,6 +121,37 @@ test('resolveListingCoordinates ignores blank and null geocode cache coordinates
   );
 });
 
+test('resolveListingCoordinates ignores invalid coordinate types and ranges', () => {
+  assert.equal(
+    resolveListingCoordinates(
+      { mapLat: 91, mapLon: 6.84, address: 'Rue du Lac 4, 1800 Vevey' },
+      {}
+    ),
+    null
+  );
+  assert.equal(
+    resolveListingCoordinates(
+      { mapLat: 46.46, mapLon: 181, address: 'Rue du Lac 4, 1800 Vevey' },
+      {}
+    ),
+    null
+  );
+  assert.equal(
+    resolveListingCoordinates(
+      { address: 'Rue du Lac 4, 1800 Vevey' },
+      { 'rue du lac 4, 1800 vevey, suisse': { lat: true, lon: 6.84 } }
+    ),
+    null
+  );
+  assert.equal(
+    resolveListingCoordinates(
+      { address: 'Rue du Lac 4, 1800 Vevey' },
+      { 'rue du lac 4, 1800 vevey, suisse': { lat: 46.46, lon: -181 } }
+    ),
+    null
+  );
+});
+
 test('buildMapListingsPayload includes only active displayed non-refused listings with coordinates', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'apartment-map-'));
   const profilesDir = path.join(root, 'profiles');

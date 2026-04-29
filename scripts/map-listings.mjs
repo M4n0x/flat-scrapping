@@ -35,8 +35,13 @@ async function readJsonSafe(filePath, fallback) {
 function toNumberOrNull(value) {
   if (value == null) return null;
   if (typeof value === 'string' && !value.trim()) return null;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function isValidMapPoint(lat, lon) {
+  return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
 }
 
 function sanitizeAddressPart(value = '') {
@@ -61,13 +66,13 @@ function cachePoint(value) {
   if (!value || typeof value !== 'object') return null;
   const lat = toNumberOrNull(value.lat);
   const lon = toNumberOrNull(value.lon);
-  return lat == null || lon == null ? null : { lat, lon };
+  return lat == null || lon == null || !isValidMapPoint(lat, lon) ? null : { lat, lon };
 }
 
 export function resolveListingCoordinates(item = {}, geocodeCache = {}) {
   const mapLat = toNumberOrNull(item.mapLat);
   const mapLon = toNumberOrNull(item.mapLon);
-  if (mapLat != null && mapLon != null) {
+  if (mapLat != null && mapLon != null && isValidMapPoint(mapLat, mapLon)) {
     return {
       lat: mapLat,
       lon: mapLon,
