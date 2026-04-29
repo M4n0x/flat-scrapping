@@ -3,6 +3,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildMapListingsPayload } from './map-listings.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -375,6 +376,11 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && u.pathname === '/api/profiles') {
     const profiles = await listProfiles();
     return sendJson(res, 200, { profiles });
+  }
+
+  if (req.method === 'GET' && u.pathname === '/api/map-listings') {
+    const payload = await buildMapListingsPayload(PROFILES_DATA_DIR);
+    return sendJson(res, 200, payload);
   }
 
   if (req.method === 'GET' && u.pathname === '/api/profile/detail') {
