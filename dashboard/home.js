@@ -501,10 +501,15 @@ function ensureLeaflet() {
   return window.L && typeof window.L.map === 'function';
 }
 
+function renderMapRetryError(message) {
+  mapStatusEl.innerHTML = `${escapeHtml(message)} <button id="map-retry" class="save-inline" type="button">Réessayer</button>`;
+  document.getElementById('map-retry')?.addEventListener('click', loadMapData);
+}
+
 function ensureMapInstance() {
   if (mapInstance) return true;
   if (!ensureLeaflet()) {
-    mapStatusEl.textContent = 'Impossible de charger la carte. Vérifiez la connexion réseau.';
+    renderMapRetryError('Impossible de charger la carte. Vérifiez la connexion réseau.');
     return false;
   }
 
@@ -614,12 +619,11 @@ async function loadMapData() {
     mapPayload = await res.json();
     visibleProfileSlugs = loadVisibleProfileSlugs(mapPayload.profiles || []);
     renderMapFilters();
-    ensureMapInstance();
+    if (!ensureMapInstance()) return;
     renderMapMarkers(true);
     mapLoaded = true;
   } catch (err) {
-    mapStatusEl.innerHTML = `Erreur carte: ${escapeHtml(err.message)} <button id="map-retry" class="save-inline" type="button">Réessayer</button>`;
-    document.getElementById('map-retry')?.addEventListener('click', loadMapData);
+    renderMapRetryError(`Erreur carte: ${err.message}`);
   }
 }
 
