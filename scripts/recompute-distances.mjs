@@ -54,14 +54,24 @@ function httpsGet(url) {
   });
 }
 
+function toFinitePoint(value) {
+  const lat = Number(value?.lat);
+  const lon = Number(value?.lon);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
 async function geocodeAddress(query, cache) {
   const key = query.toLowerCase().trim();
-  if (cache[key]) return cache[key];
+  if (Object.prototype.hasOwnProperty.call(cache, key)) return toFinitePoint(cache[key]);
   
   const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
   const results = await httpsGet(url);
   if (results?.[0]) {
-    const point = { lat: parseFloat(results[0].lat), lon: parseFloat(results[0].lon) };
+    const point = toFinitePoint(results[0]);
+    if (!point) {
+      cache[key] = null;
+      return null;
+    }
     cache[key] = point;
     return point;
   }
