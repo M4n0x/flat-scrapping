@@ -367,6 +367,7 @@ formEl.addEventListener('submit', async (e) => {
     if (!data.ok) throw new Error(data.error || 'Erreur inconnue');
     hideForm();
     await loadProfiles();
+    await refreshMapIfLoaded();
   } catch (err) {
     alert(`Erreur: ${err.message}`);
   } finally {
@@ -453,6 +454,7 @@ async function confirmDelete(btn) {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
     await loadProfiles();
+    await refreshMapIfLoaded();
   } catch (err) {
     alert(`Erreur: ${err.message}`);
     btn.disabled = false;
@@ -625,6 +627,10 @@ async function loadMapData() {
   } catch (err) {
     renderMapRetryError(`Erreur carte: ${err.message}`);
   }
+}
+
+async function refreshMapIfLoaded() {
+  if (mapLoaded) await loadMapData();
 }
 
 function ensureMapLoaded() {
