@@ -1,0 +1,136 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+
+import {
+  buildListingAddressQuery,
+  buildMapListingsPayload,
+  profileColor,
+  resolveListingCoordinates
+} from '../scripts/map-listings.mjs';
+
+async function writeJson(filePath, value) {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, JSON.stringify(value, null, 2));
+}
+
+test('profileColor is stable and returns a hex color', () => {
+  const first = profileColor('vevey');
+  const second = profileColor('vevey');
+  assert.equal(first, second);
+  assert.match(first, /^#[0-9a-f]{6}$/i);
+});
+
+test('buildListingAddressQuery prefers listing address and appends Switzerland', () => {
+  assert.equal(
+    buildListingAddressQuery({ address: 'Rue du Lac 4, 1800 Vevey', area: 'Vevey' }),
+    'Rue du Lac 4, 1800 Vevey, Suisse'
+  );
+  assert.equal(
+    buildListingAddressQuery({ address: '', area: 'Fribourg' }),
+    'Fribourg, Suisse'
+  );
+});
+
+test('resolveListingCoordinates uses persisted map coordinates before cache', () => {
+  const coords = resolveListingCoordinates(
+    { mapLat: '46.46', mapLon: '6.84', address: 'Rue du Lac 4, 1800 Vevey' },
+    { 'rue du lac 4, 1800 vevey, suisse': { lat: 1, lon: 2 } }
+  );
+  assert.deepEqual(coords, {
+    lat: 46.46,
+    lon: 6.84,
+    address: 'Rue du Lac 4, 1800 Vevey'
+  });
+});
+
+test('resolveListingCoordinates falls back to geocode cache address query', () => {
+  const coords = resolveListingCoordinates(
+    { address: 'Rue du Lac 4, 1800 Vevey', area: 'Vevey' },
+    { 'rue du lac 4, 1800 vevey, suisse': { lat: 46.46, lon: 6.84 } }
+  );
+  assert.deepEqual(coords, {
+    lat: 46.46,
+    lon: 6.84,
+    address: 'Rue du Lac 4, 1800 Vevey, Suisse'
+  });
+});
+
+test('buildMapListingsPayload includes only active displayed non-refused listings with coordinates', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'apartment-map-'));
+  const profilesDir = path.join(root, 'profiles');
+
+  try {
+    await writeJson(path.join(profilesDir, 'vevey', 'watch-config.json'), {
+      shortTitle: 'Vevey',
+      areas: [{ label: 'Vevey' }]
+    });
+    await writeJson(path.join(profilesDir, 'vevey', 'geocode-cache.json'), {
+      'rue active 1, 1800 vevey, suisse': { lat: 46.46, lon: 6.84 }
+    });
+    await writeJson(path.join(profilesDir, 'vevey', 'tracker.json'), {
+      listings: [
+        {
+          id: 'active',
+          active: true,
+          display: true,
+          status: 'À contacter',
+          title: 'Appartement actif',
+          address: 'Rue Active 1, 1800 Vevey',
+          area: 'Vevey',
+          totalChf: 1450,
+          rooms: 2.5,
+          surfaceM2: 62,
+          source: 'immobilier.ch',
+          url: 'https://example.test/active'
+        },
+        {
+          id: 'removed',
+          active: false,
+          display: true,
+          isRemoved: true,
+          address: 'Rue Removed 1, 1800 Vevey'
+        },
+        {
+          id: 'refused',
+          active: true,
+          display: true,
+          status: 'Refusé',
+          mapLat: 46.47,
+          mapLon: 6.85,
+          address: 'Rue Refused 1, 1800 Vevey'
+        },
+        {
+          id: 'missing-coords',
+          active: true,
+          display: true,
+          status: 'À contacter',
+          address: 'Rue Missing 1, 1800 Vevey'
+        }
+      ]
+    });
+
+    const payload = await buildMapListingsPayload(profilesDir);
+
+    assert.equal(payload.profiles.length, 1);
+    assert.equal(payload.profiles[0].slug, 'vevey');
+    assert.equal(payload.profiles[0].totalActiveDisplayed, 2);
+    assert.equal(payload.profiles[0].mappedCount, 1);
+    assert.equal(payload.profiles[0].missingCoordinates, 1);
+    assert.equal(payload.listings.length, 1);
+    assert.equal(payload.listings[0].id, 'active');
+    assert.equal(payload.listings[0].profileSlug, 'vevey');
+    assert.equal(payload.listings[0].lat, 46.46);
+    assert.equal(payload.listings[0].lon, 6.84);
+    assert.deepEqual(payload.totals, {
+      profiles: 1,
+      activeDisplayed: 2,
+      mapped: 1,
+      missingCoordinates: 1
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
