@@ -66,6 +66,61 @@ function safePopupUrl(value) {
   }
 }
 
+function safeImageUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('/data/profiles/')) return raw;
+
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.href;
+  } catch {
+    return '';
+  }
+}
+
+function listingImageUrls(item = {}) {
+  return [...new Set([
+    ...(Array.isArray(item.imageUrls) ? item.imageUrls : []),
+    ...(Array.isArray(item.imageUrlsLocal) ? item.imageUrlsLocal : []),
+    ...(Array.isArray(item.imageUrlsRemote) ? item.imageUrlsRemote : []),
+    item.imageUrl
+  ].map(safeImageUrl).filter(Boolean))].slice(0, 8);
+}
+
+function popupCarouselHtml(item = {}) {
+  const imageUrls = listingImageUrls(item);
+  if (!imageUrls.length) return '';
+
+  const title = item.title || item.address || 'annonce';
+  const thumbs = imageUrls.map((src, index) => `
+    <button class="map-popup-carousel-thumb ${index === 0 ? 'active' : ''}" type="button" data-carousel-thumb data-carousel-index="${index}" data-carousel-url="${escapeHtml(src)}" aria-label="Photo ${index + 1}">
+      <img src="${escapeHtml(src)}" alt="Photo ${index + 1}" loading="lazy" />
+    </button>
+  `).join('');
+  const controls = imageUrls.length > 1
+    ? `
+      <button class="map-popup-carousel-nav prev" type="button" data-carousel-prev aria-label="Photo précédente">‹</button>
+      <button class="map-popup-carousel-nav next" type="button" data-carousel-next aria-label="Photo suivante">›</button>
+    `
+    : '';
+  const counter = imageUrls.length > 1
+    ? `<div class="map-popup-carousel-count" data-carousel-count>1 / ${imageUrls.length}</div>`
+    : '';
+
+  return `
+    <div class="map-popup-carousel" data-carousel-index="0">
+      <div class="map-popup-carousel-main">
+        <img class="map-popup-carousel-image" data-carousel-current src="${escapeHtml(imageUrls[0])}" alt="Photo ${escapeHtml(title)}" loading="lazy" />
+        ${controls}
+        ${counter}
+      </div>
+      ${imageUrls.length > 1 ? `<div class="map-popup-carousel-thumbs">${thumbs}</div>` : ''}
+    </div>
+  `;
+}
+
 export function popupHtml(item = {}) {
   const title = item.title || item.address || 'Annonce';
   const meta = [
@@ -81,9 +136,11 @@ export function popupHtml(item = {}) {
   const link = url
     ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Ouvrir l'annonce</a>`
     : '';
+  const carousel = popupCarouselHtml(item);
 
   return `
     <div class="map-popup">
+      ${carousel}
       <div class="map-popup-profile">${escapeHtml(item.profileTitle || item.profileSlug || '')}</div>
       <strong>${escapeHtml(title)}</strong>
       ${address}

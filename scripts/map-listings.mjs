@@ -71,6 +71,33 @@ function toNumberOrNull(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function uniqueStrings(values = []) {
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
+}
+
+function safeImageUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('/data/profiles/')) return raw;
+
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.href;
+  } catch {
+    return '';
+  }
+}
+
+function listingImageUrls(item = {}) {
+  return uniqueStrings([
+    ...(Array.isArray(item.imageUrlsLocal) ? item.imageUrlsLocal : []),
+    ...(Array.isArray(item.imageUrls) ? item.imageUrls : []),
+    ...(Array.isArray(item.imageUrlsRemote) ? item.imageUrlsRemote : []),
+    item.imageUrl
+  ].map(safeImageUrl)).slice(0, 8);
+}
+
 function isValidMapPoint(lat, lon) {
   return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
 }
@@ -140,6 +167,7 @@ function compactListing(item, profile, coords) {
     surfaceM2: toNumberOrNull(item.surfaceM2),
     source: item.source || '',
     url: item.url || '',
+    imageUrls: listingImageUrls(item),
     lat: coords.lat,
     lon: coords.lon
   };

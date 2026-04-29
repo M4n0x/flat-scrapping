@@ -255,6 +255,52 @@ test('buildMapListingsPayload includes only active displayed non-refused listing
   }
 });
 
+test('buildMapListingsPayload includes sanitized listing image urls', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'apartment-map-images-'));
+  const profilesDir = path.join(root, 'profiles');
+
+  try {
+    await writeJson(path.join(profilesDir, 'vevey', 'watch-config.json'), {
+      shortTitle: 'Vevey'
+    });
+    await writeJson(path.join(profilesDir, 'vevey', 'tracker.json'), {
+      listings: [
+        {
+          id: 'with-images',
+          active: true,
+          display: true,
+          mapLat: 46.46,
+          mapLon: 6.84,
+          address: 'Rue Image 1, 1800 Vevey',
+          imageUrlsLocal: [
+            '/data/profiles/vevey/images/local-cover.jpg',
+            'javascript:alert(1)'
+          ],
+          imageUrls: [
+            'https://example.test/fallback.jpg'
+          ],
+          imageUrlsRemote: [
+            'https://example.test/remote.jpg',
+            'ftp://example.test/unsafe.jpg'
+          ],
+          imageUrl: 'https://example.test/single.jpg'
+        }
+      ]
+    });
+
+    const payload = await buildMapListingsPayload(profilesDir);
+
+    assert.deepEqual(payload.listings[0].imageUrls, [
+      '/data/profiles/vevey/images/local-cover.jpg',
+      'https://example.test/fallback.jpg',
+      'https://example.test/remote.jpg',
+      'https://example.test/single.jpg'
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('buildMapListingsPayload sorts profiles by slug and listings by profile then id', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'apartment-map-sort-'));
   const profilesDir = path.join(root, 'profiles');

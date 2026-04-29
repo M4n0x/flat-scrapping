@@ -64,6 +64,40 @@ test('popupHtml keeps valid https links with safe attributes', () => {
   assert.match(html, /rel="noopener noreferrer"/);
 });
 
+test('popupHtml renders a compact image carousel for listing images', () => {
+  const html = popupHtml({
+    title: 'Appartement',
+    imageUrls: [
+      '/data/profiles/vevey/images/cover.jpg',
+      'https://example.test/two.jpg'
+    ]
+  });
+
+  assert.match(html, /class="map-popup-carousel"/);
+  assert.match(html, /class="map-popup-carousel-image"/);
+  assert.match(html, /src="\/data\/profiles\/vevey\/images\/cover\.jpg"/);
+  assert.match(html, /data-carousel-url="https:\/\/example\.test\/two\.jpg"/);
+  assert.match(html, /data-carousel-prev/);
+  assert.match(html, /data-carousel-next/);
+  assert.match(html, /1 \/ 2/);
+});
+
+test('popupHtml omits unsafe image urls from the carousel', () => {
+  const html = popupHtml({
+    imageUrls: [
+      'javascript:alert(1)',
+      'ftp://example.test/image.jpg',
+      '/dashboard/home.css',
+      'https://example.test/safe.jpg'
+    ]
+  });
+
+  assert.match(html, /https:\/\/example\.test\/safe\.jpg/);
+  assert.doesNotMatch(html, /javascript:/);
+  assert.doesNotMatch(html, /ftp:\/\//);
+  assert.doesNotMatch(html, /\/dashboard\/home\.css/);
+});
+
 test('escapeHtml handles quotes', () => {
   assert.equal(escapeHtml(`"A&B"`), '&quot;A&amp;B&quot;');
 });

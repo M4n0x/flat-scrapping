@@ -733,15 +733,100 @@ label.checkbox input[type="checkbox"] {
 
 .map-popup {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   color: #102129;
-  min-width: 190px;
+  width: min(270px, 72vw);
+  min-width: 210px;
 }
 
 .map-popup-profile,
 .map-popup-muted {
   color: #49616a;
   font-size: 0.78rem;
+}
+
+.map-popup-carousel {
+  display: grid;
+  gap: 5px;
+}
+
+.map-popup-carousel-main {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #dfe8ea;
+  aspect-ratio: 4 / 3;
+}
+
+.map-popup-carousel-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.map-popup-carousel-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 36px;
+  border: 0;
+  background: rgba(7, 23, 32, 0.72);
+  color: white;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.map-popup-carousel-nav.prev {
+  left: 0;
+}
+
+.map-popup-carousel-nav.next {
+  right: 0;
+}
+
+.map-popup-carousel-count {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  border-radius: 999px;
+  background: rgba(7, 23, 32, 0.76);
+  color: white;
+  padding: 3px 7px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.map-popup-carousel-thumbs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 38px;
+  gap: 5px;
+  overflow-x: auto;
+}
+
+.map-popup-carousel-thumb {
+  width: 38px;
+  height: 32px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.map-popup-carousel-thumb.active {
+  border-color: #102129;
+}
+
+.map-popup-carousel-thumb img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 @media (max-width: 760px) {

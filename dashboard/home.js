@@ -726,6 +726,49 @@ function renderMapMarkers(fitBounds = true) {
   return true;
 }
 
+function setPopupCarouselIndex(carousel, nextIndex) {
+  const thumbs = [...carousel.querySelectorAll('[data-carousel-thumb]')];
+  if (!thumbs.length) return;
+
+  const index = ((nextIndex % thumbs.length) + thumbs.length) % thumbs.length;
+  const activeThumb = thumbs[index];
+  const image = carousel.querySelector('[data-carousel-current]');
+  const counter = carousel.querySelector('[data-carousel-count]');
+  const src = activeThumb.dataset.carouselUrl || '';
+
+  carousel.dataset.carouselIndex = String(index);
+  thumbs.forEach((thumb, thumbIndex) => {
+    thumb.classList.toggle('active', thumbIndex === index);
+  });
+  if (image && src) {
+    image.src = src;
+    image.alt = `Photo ${index + 1}`;
+  }
+  if (counter) {
+    counter.textContent = `${index + 1} / ${thumbs.length}`;
+  }
+}
+
+function handleMapCarouselClick(event) {
+  const control = event.target.closest('[data-carousel-prev], [data-carousel-next], [data-carousel-thumb]');
+  if (!control) return;
+
+  const carousel = control.closest('.map-popup-carousel');
+  if (!carousel) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const current = Number(carousel.dataset.carouselIndex || 0);
+  if (control.matches('[data-carousel-prev]')) {
+    setPopupCarouselIndex(carousel, current - 1);
+  } else if (control.matches('[data-carousel-next]')) {
+    setPopupCarouselIndex(carousel, current + 1);
+  } else {
+    setPopupCarouselIndex(carousel, Number(control.dataset.carouselIndex || 0));
+  }
+}
+
 async function loadMapData() {
   if (!mapStatusEl) return;
   mapStatusEl.textContent = 'Chargement de la carte…';
@@ -758,6 +801,7 @@ function ensureMapLoaded() {
 mapRefreshBtn?.addEventListener('click', loadMapData);
 mapModePointsEl?.addEventListener('click', () => setMapMode('points'));
 mapModeDetailsEl?.addEventListener('click', () => setMapMode('details'));
+document.getElementById('global-map')?.addEventListener('click', handleMapCarouselClick);
 setMapMode(mapMode);
 
 // --- Scan all ---
