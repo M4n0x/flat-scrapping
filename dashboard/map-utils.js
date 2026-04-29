@@ -140,13 +140,15 @@ export function popupHtml(item = {}) {
   return `
     <div class="map-popup">
       ${carousel}
-      <div class="map-popup-profile">${escapeHtml(item.profileTitle || item.profileSlug || '')}</div>
-      <strong>${escapeHtml(title)}</strong>
-      ${address}
-      ${area}
-      <div>${escapeHtml(meta)}</div>
-      ${source}
-      ${link}
+      <div class="map-popup-body">
+        <div class="map-popup-profile">${escapeHtml(item.profileTitle || item.profileSlug || '')}</div>
+        <strong>${escapeHtml(title)}</strong>
+        ${address}
+        ${area}
+        <div>${escapeHtml(meta)}</div>
+        ${source}
+        ${link}
+      </div>
     </div>
   `;
 }

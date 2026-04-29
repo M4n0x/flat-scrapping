@@ -731,13 +731,30 @@ label.checkbox input[type="checkbox"] {
   box-shadow: 0 5px 14px rgba(0, 0, 0, 0.32);
 }
 
+.global-map-popup .leaflet-popup-content-wrapper {
+  padding: 0;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.global-map-popup .leaflet-popup-content {
+  width: min(360px, 82vw) !important;
+  margin: 0;
+}
+
 .map-popup {
   display: grid;
-  gap: 6px;
+  gap: 0;
   color: #102129;
   position: relative;
-  width: min(360px, 82vw);
-  min-width: 240px;
+  width: 100%;
+  min-width: 0;
+}
+
+.map-popup-body {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px 18px;
 }
 
 .map-popup-profile,
@@ -748,13 +765,12 @@ label.checkbox input[type="checkbox"] {
 
 .map-popup-carousel {
   display: grid;
-  gap: 5px;
+  gap: 0;
 }
 
 .map-popup-carousel-main {
   position: relative;
   overflow: hidden;
-  border-radius: 8px;
   background: #dfe8ea;
   aspect-ratio: 16 / 9;
 }

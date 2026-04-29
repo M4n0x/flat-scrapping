@@ -696,7 +696,12 @@ function renderMapMarkers(fitBounds = true) {
 
   for (const item of visible) {
     const marker = window.L.marker([item.lat, item.lon], { icon: createMapIcon(item) });
-    marker.bindPopup(popupHtml(item), { closeButton: false });
+    marker.bindPopup(popupHtml(item), {
+      className: 'global-map-popup',
+      closeButton: false,
+      maxWidth: 380,
+      minWidth: 260
+    });
     marker.addTo(mapLayer);
     bounds.push([item.lat, item.lon]);
   }

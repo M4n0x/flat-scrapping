@@ -76,6 +76,7 @@ test('popupHtml renders a hero image carousel without thumbnails', () => {
   assert.match(html, /class="map-popup-carousel"/);
   assert.match(html, /class="map-popup-carousel-image map-popup-hero-image"/);
   assert.match(html, /class="map-popup-close"/);
+  assert.match(html, /class="map-popup-body"/);
   assert.match(html, /data-popup-close/);
   assert.match(html, /src="\/data\/profiles\/vevey\/images\/cover\.jpg"/);
   assert.match(html, /data-carousel-url="https:\/\/example\.test\/two\.jpg"/);
