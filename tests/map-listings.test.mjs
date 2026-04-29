@@ -314,3 +314,39 @@ test('buildMapListingsPayload sorts profiles by slug and listings by profile the
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('buildMapListingsPayload assigns distinct colors when profile hash colors collide', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'apartment-map-colors-'));
+  const profilesDir = path.join(root, 'profiles');
+
+  try {
+    for (const slug of ['lausanne-gang', 'vevey']) {
+      await writeJson(path.join(profilesDir, slug, 'watch-config.json'), {
+        shortTitle: slug
+      });
+      await writeJson(path.join(profilesDir, slug, 'tracker.json'), {
+        listings: [
+          {
+            id: `${slug}-listing`,
+            active: true,
+            display: true,
+            mapLat: 46.5,
+            mapLon: 6.6,
+            address: slug
+          }
+        ]
+      });
+    }
+
+    assert.equal(profileColor('lausanne-gang'), profileColor('vevey'));
+
+    const payload = await buildMapListingsPayload(profilesDir);
+    const colors = payload.profiles.map((profile) => profile.color);
+    const listingColors = payload.listings.map((listing) => listing.profileColor);
+
+    assert.equal(new Set(colors).size, 2);
+    assert.deepEqual(new Set(listingColors), new Set(colors));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

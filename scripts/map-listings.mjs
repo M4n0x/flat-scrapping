@@ -14,13 +14,44 @@ const PROFILE_COLORS = [
   '#f27bd5'
 ];
 
-export function profileColor(slug = '') {
+function profileHash(slug = '') {
   const text = String(slug || '').trim().toLowerCase();
   let hash = 0;
   for (let i = 0; i < text.length; i += 1) {
     hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
   }
-  return PROFILE_COLORS[hash % PROFILE_COLORS.length];
+  return hash;
+}
+
+export function profileColor(slug = '') {
+  return PROFILE_COLORS[profileHash(slug) % PROFILE_COLORS.length];
+}
+
+function fallbackProfileColor(slug, index, usedColors) {
+  const hash = profileHash(slug);
+  for (let attempt = 0; attempt < 360; attempt += 1) {
+    const hue = (hash + index * 29 + attempt * 137) % 360;
+    const color = `hsl(${hue} 68% 42%)`;
+    if (!usedColors.has(color)) return color;
+  }
+  return `hsl(${hash % 360} 68% ${35 + (index % 25)}%)`;
+}
+
+function assignProfileColors(profiles) {
+  const usedColors = new Set();
+
+  profiles.forEach((profile, index) => {
+    let color = profileColor(profile.slug);
+    if (usedColors.has(color)) {
+      const preferredIndex = PROFILE_COLORS.indexOf(color);
+      color = PROFILE_COLORS.find((candidate, candidateIndex) => (
+        candidateIndex > preferredIndex && !usedColors.has(candidate)
+      )) || PROFILE_COLORS.find((candidate) => !usedColors.has(candidate));
+    }
+
+    profile.color = color || fallbackProfileColor(profile.slug, index, usedColors);
+    usedColors.add(profile.color);
+  });
 }
 
 async function readJsonSafe(filePath, fallback) {
@@ -176,6 +207,12 @@ export async function buildMapListingsPayload(profilesDir) {
 
   profiles.sort((a, b) => a.slug.localeCompare(b.slug));
   listings.sort((a, b) => a.profileSlug.localeCompare(b.profileSlug) || String(a.id).localeCompare(String(b.id)));
+  assignProfileColors(profiles);
+
+  const profileColors = new Map(profiles.map((profile) => [profile.slug, profile.color]));
+  for (const listing of listings) {
+    listing.profileColor = profileColors.get(listing.profileSlug) || listing.profileColor;
+  }
 
   return {
     generatedAt: new Date().toISOString(),
