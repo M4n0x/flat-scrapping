@@ -57,6 +57,7 @@ function httpsGet(url) {
 function toFiniteCoordinate(value) {
   if (value == null) return null;
   if (typeof value === 'string' && !value.trim()) return null;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
@@ -69,7 +70,11 @@ function toFinitePoint(value) {
 
 async function geocodeAddress(query, cache) {
   const key = query.toLowerCase().trim();
-  if (Object.prototype.hasOwnProperty.call(cache, key)) return toFinitePoint(cache[key]);
+  if (Object.prototype.hasOwnProperty.call(cache, key)) {
+    const point = toFinitePoint(cache[key]);
+    if (point) return point;
+    if (cache[key] === null) return null;
+  }
   
   const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
   const results = await httpsGet(url);
