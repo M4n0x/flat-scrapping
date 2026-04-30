@@ -327,6 +327,9 @@ function setHomeView(view, persist = true) {
   homePanelProfilesEl?.classList.toggle('active', !mapActive);
   homePanelMapEl?.classList.toggle('active', mapActive);
 
+  homeTabProfilesEl?.setAttribute('aria-selected', String(view === 'profiles'));
+  homeTabMapEl?.setAttribute('aria-selected', String(view === 'map'));
+
   if (persist) localStorage.setItem(HOME_VIEW_STORAGE_KEY, mapActive ? 'map' : 'profiles');
   if (mapActive) {
     ensureMapLoaded();
@@ -443,7 +446,10 @@ function buildProfileCard(profile) {
   a.innerHTML = `
     <div class="profile-card-head">
       <h3>${escapeHtml(profile.label || profile.shortTitle || profile.slug)}</h3>
-      <button class="row-actions" type="button" data-edit aria-label="Modifier le profil">⋯</button>
+      <div class="profile-card-menu">
+        <button class="row-actions" type="button" data-edit aria-label="Modifier le profil" title="Modifier">⋯</button>
+        <button class="row-actions danger" type="button" data-delete aria-label="Supprimer le profil" title="Supprimer">🗑</button>
+      </div>
     </div>
     <div class="profile-card-meta"><span>${escapeHtml(zonesText)}</span></div>
     <div class="profile-card-meta">
@@ -464,6 +470,17 @@ function buildProfileCard(profile) {
     e.stopPropagation();
     editProfile(profile.slug);
   });
+
+  const deleteBtn = a.querySelector('[data-delete]');
+  if (deleteBtn) {
+    deleteBtn.dataset.slug = profile.slug;
+    deleteBtn.dataset.name = profile.label || profile.shortTitle || profile.slug;
+    deleteBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      confirmDelete(deleteBtn);
+    });
+  }
   return a;
 }
 
@@ -584,6 +601,8 @@ function setMapMode(nextMode) {
   localStorage.setItem(MAP_MODE_STORAGE_KEY, mapMode);
   mapModePointsEl?.classList.toggle('active', mapMode === 'points');
   mapModeDetailsEl?.classList.toggle('active', mapMode === 'details');
+  mapModePointsEl?.setAttribute('aria-selected', String(mapMode === 'points'));
+  mapModeDetailsEl?.setAttribute('aria-selected', String(mapMode === 'details'));
   renderMapMarkers(false);
 }
 
@@ -698,7 +717,7 @@ async function ensureMapInstance() {
 function createMapIcon(item) {
   const color = item.profileColor || '#56d4b8';
   if (mapMode === 'details') {
-    const html = `<div class="map-detail-marker" style="background:${escapeHtml(color)}">${escapeHtml(formatMarkerDetails(item))}</div>`;
+    const html = `<div class="map-detail-marker" style="background:${cssColor(color)}">${escapeHtml(formatMarkerDetails(item))}</div>`;
     return window.L.divIcon({
       className: 'map-marker-wrap',
       html,
@@ -710,7 +729,7 @@ function createMapIcon(item) {
 
   return window.L.divIcon({
     className: 'map-marker-wrap',
-    html: `<div class="map-dot-marker" style="background:${escapeHtml(color)}"></div>`,
+    html: `<div class="map-dot-marker" style="background:${cssColor(color)}"></div>`,
     iconSize: [18, 18],
     iconAnchor: [9, 9],
     popupAnchor: [0, -9]

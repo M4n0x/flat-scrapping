@@ -465,3 +465,33 @@
   border-color: var(--warning);
   color: var(--warning-dark);
 }
+
+/* ---------- Toolbar scan progress ---------- */
+.toolbar .last-scan {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.toolbar .last-scan::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.toolbar .last-scan.running::before {
+  background: var(--warning);
+  animation: pulse 1.4s infinite;
+}
+
+/* ---------- Profile card menu ---------- */
+.profile-card-menu {
+  display: inline-flex;
+  gap: var(--sp-1);
+}
+.profile-card-menu .row-actions.danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger-dark);
+}

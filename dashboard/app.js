@@ -939,20 +939,32 @@ function renderMobile(listings) {
     const cover = urls[0] || '';
 
     card.innerHTML = `
-      ${cover ? `<img class="mobile-cover" src="${cover}" alt="Aperçu ${item.objectType || item.title}" loading="lazy" />` : '<div class="mobile-cover"></div>'}
+      ${cover ? `<img class="mobile-cover" data-cover alt="Aperçu ${escapeHtml(item.objectType || item.title || '')}" loading="lazy" />` : '<div class="mobile-cover"></div>'}
       <div class="mobile-content">
-        <h3 class="mobile-title"><span class="tag">${item.priority || '-'}</span> ${scoreMiniHtml(item)} <a href="${item.url}" target="_blank" rel="noreferrer">${item.objectType || item.title}</a></h3>
+        <h3 class="mobile-title"><span class="tag">${escapeHtml(item.priority || '-')}</span> ${scoreMiniHtml(item)} <a data-href target="_blank" rel="noreferrer">${escapeHtml(item.objectType || item.title || '')}</a></h3>
         <div class="mobile-meta">
-          <div>${item.address || ''}</div>
-          <div>${item.area || '-'} · ${money(item.totalChf)}${sourceMetaHtml(item) ? ` · ${sourceMetaHtml(item)}` : ''}</div>
+          <div>${escapeHtml(item.address || '')}</div>
+          <div>${escapeHtml(item.area || '-')} · ${money(item.totalChf)}${sourceMetaHtml(item) ? ` · ${sourceMetaHtml(item)}` : ''}</div>
           <div>${travelInlineLabel(item)}</div>
           <div>Publié: ${publishedLabel(item)}</div>
-          <div>${item.priceRaw || ''}</div>
+          <div>${escapeHtml(item.priceRaw || '')}</div>
           ${stateBadgesHtml(item)}
           <div class="mobile-urgency"></div>
         </div>
       </div>
     `;
+
+    // Set cover image src via DOM property to avoid HTML injection
+    if (cover) {
+      const coverImg = card.querySelector('[data-cover]');
+      if (coverImg) coverImg.src = cover;
+    }
+
+    // Set link href via DOM property to avoid HTML injection
+    if (item.url) {
+      const linkEl = card.querySelector('[data-href]');
+      if (linkEl) linkEl.href = item.url;
+    }
 
     const mobileCover = card.querySelector('.mobile-cover');
     if (mobileCover && urls.length) {
