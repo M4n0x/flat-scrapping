@@ -2661,58 +2661,97 @@ async function main() {
   const trackerMap = toMap(tracker.listings || []);
   const targetAreaSet = buildTargetAreaSet(config.areas || []);
 
+  emitEvent({
+    type: 'scan-start',
+    profile: PROFILE,
+    sources: Object.keys(config.sources || {})
+  });
+
   const scraped = [];
 
-  for (const area of config.areas || []) {
-    const canton = resolveImmobilierCanton(area, config);
-    const areaLabel = String(area?.label || '').trim();
-    const configuredSlug = normalizeSlugCandidate(area?.slug || '');
-    const immobilierSlug = await resolveImmobilierSlugForArea(area, config);
+  {
+    const source = 'immobilier.ch';
+    emitEvent({ type: 'source-start', source });
+    let immFoundCount = 0;
+    let immErrorCount = 0;
+    for (const area of config.areas || []) {
+      const canton = resolveImmobilierCanton(area, config);
+      const areaLabel = String(area?.label || '').trim();
+      const configuredSlug = normalizeSlugCandidate(area?.slug || '');
+      const immobilierSlug = await resolveImmobilierSlugForArea(area, config);
 
-    if (immobilierSlug && configuredSlug && immobilierSlug !== configuredSlug) {
-      console.log(`INFO immobilier slug auto-resolved for "${areaLabel}": ${configuredSlug} -> ${immobilierSlug}`);
-    }
+      if (immobilierSlug && configuredSlug && immobilierSlug !== configuredSlug) {
+        console.log(`INFO immobilier slug auto-resolved for "${areaLabel}": ${configuredSlug} -> ${immobilierSlug}`);
+      }
 
-    for (let page = 1; page <= (config.pagesPerArea || 1); page++) {
-      const url = `https://www.immobilier.ch/fr/louer/appartement/${canton}/${immobilierSlug || configuredSlug}/page-${page}`;
-      try {
-        const html = await fetchHtml(url);
-        const items = parseListingsFromHtml(html, areaLabel);
+      const totalPages = config.pagesPerArea || 1;
+      for (let page = 1; page <= totalPages; page++) {
+        const url = `https://www.immobilier.ch/fr/louer/appartement/${canton}/${immobilierSlug || configuredSlug}/page-${page}`;
+        try {
+          const html = await fetchHtml(url);
+          const items = parseListingsFromHtml(html, areaLabel);
 
-        // debug disabled
-        for (const item of items) {
-          if (!isTargetAreaCity(item.area || '', targetAreaSet)) continue;
-          scraped.push(item);
+          // debug disabled
+          let pageFound = 0;
+          for (const item of items) {
+            if (!isTargetAreaCity(item.area || '', targetAreaSet)) continue;
+            scraped.push(item);
+            pageFound++;
+            immFoundCount++;
+          }
+          emitEvent({ type: 'source-progress', source, page, totalPages, found: pageFound });
+        } catch (err) {
+          console.error(`WARN ${url}: ${err.message}`);
+          immErrorCount++;
         }
-      } catch (err) {
-        console.error(`WARN ${url}: ${err.message}`);
       }
     }
+    emitEvent({ type: 'source-done', source, found: immFoundCount, kept: immFoundCount, errored: immErrorCount });
   }
 
   if (config.sources?.flatfox !== false) {
+    const source = 'flatfox.ch';
+    emitEvent({ type: 'source-start', source });
     const flatfoxItems = await scrapeFlatfoxListings(config);
     scraped.push(...flatfoxItems);
+    emitEvent({ type: 'source-progress', source, page: 1, totalPages: null, found: flatfoxItems.length });
+    emitEvent({ type: 'source-done', source, found: flatfoxItems.length, kept: flatfoxItems.length, errored: 0 });
   }
 
   if (config.sources?.naef !== false) {
+    const source = 'naef.ch';
+    emitEvent({ type: 'source-start', source });
     const naefItems = await scrapeNaefListings(config);
     scraped.push(...naefItems);
+    emitEvent({ type: 'source-progress', source, page: 1, totalPages: null, found: naefItems.length });
+    emitEvent({ type: 'source-done', source, found: naefItems.length, kept: naefItems.length, errored: 0 });
   }
 
   if (config.sources?.bernardNicod !== false) {
+    const source = 'bernard-nicod.ch';
+    emitEvent({ type: 'source-start', source });
     const bernardItems = await scrapeBernardNicodListings(config);
     scraped.push(...bernardItems);
+    emitEvent({ type: 'source-progress', source, page: 1, totalPages: null, found: bernardItems.length });
+    emitEvent({ type: 'source-done', source, found: bernardItems.length, kept: bernardItems.length, errored: 0 });
   }
 
   if (config.sources?.retraitesListings !== false) {
+    const source = 'retraites-populaires.ch';
+    emitEvent({ type: 'source-start', source });
     const rpListings = await scrapeRetraitesPopulairesListings(config);
     scraped.push(...rpListings);
+    emitEvent({ type: 'source-progress', source, page: 1, totalPages: null, found: rpListings.length });
+    emitEvent({ type: 'source-done', source, found: rpListings.length, kept: rpListings.length, errored: 0 });
   }
 
   if (config.sources?.anibis !== false) {
+    const source = 'anibis.ch';
+    emitEvent({ type: 'source-start', source });
     const anibisItems = await scrapeAnibisListings(config);
     scraped.push(...anibisItems);
+    emitEvent({ type: 'source-progress', source, page: 1, totalPages: null, found: anibisItems.length });
+    emitEvent({ type: 'source-done', source, found: anibisItems.length, kept: anibisItems.length, errored: 0 });
   }
 
   const dedupById = new Map();
@@ -3124,6 +3163,32 @@ async function main() {
 
   normalizeListingImageFields(merged);
 
+  for (const trackerEntry of merged) {
+    emitEvent({
+      type: 'listing',
+      listing: {
+        id: trackerEntry.id,
+        profile: PROFILE,
+        lat: typeof trackerEntry.mapLat === 'number' ? trackerEntry.mapLat : null,
+        lon: typeof trackerEntry.mapLon === 'number' ? trackerEntry.mapLon : null,
+        title: trackerEntry.title || trackerEntry.address || '',
+        address: trackerEntry.address || '',
+        area: trackerEntry.area || '',
+        totalChf: trackerEntry.totalChf ?? null,
+        rooms: trackerEntry.rooms ?? null,
+        surfaceM2: trackerEntry.surfaceM2 ?? null,
+        source: trackerEntry.source || '',
+        url: trackerEntry.url || '',
+        imageUrls: Array.isArray(trackerEntry.imageUrlsLocal) ? trackerEntry.imageUrlsLocal
+          : (Array.isArray(trackerEntry.imageUrls) ? trackerEntry.imageUrls : []),
+        status: trackerEntry.status,
+        priority: trackerEntry.priority || '',
+        score: trackerEntry.score ?? null,
+        firstSeenAt: trackerEntry.firstSeenAt
+      }
+    });
+  }
+
   const visibleActive = merged.filter((x) => x.active && x.display !== false);
   const visibleRemoved = merged.filter((x) => !x.active && x.display !== false && x.status === 'archived');
   const visibleAll = merged.filter((x) => x.display !== false);
@@ -3159,9 +3224,20 @@ async function main() {
   await fs.writeFile(ROUTE_CACHE_PATH, JSON.stringify(routeCache, null, 2));
 
   console.log(makeSummary(latest));
+
+  emitEvent({
+    type: 'scan-done',
+    summary: {
+      totalListings: visibleActive.length,
+      newListings: newListings.length,
+      removed: visibleRemoved.length,
+      kept: matching.length
+    }
+  });
 }
 
 main().catch((err) => {
+  emitEvent({ type: 'scan-error', message: err && err.message ? err.message : String(err) });
   console.error(err.stack || err.message || String(err));
   process.exit(1);
 });
