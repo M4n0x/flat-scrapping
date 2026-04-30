@@ -319,6 +319,22 @@
 }
 
 /* ---------- Map popups (Leaflet) ---------- */
+/* Override Leaflet's default popup padding so the image bleeds edge-to-edge */
+.leaflet-popup-content-wrapper {
+  padding: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.leaflet-popup-content {
+  margin: 0;
+  width: 280px !important;
+  line-height: var(--lh-normal);
+}
+.leaflet-popup-tip {
+  box-shadow: var(--shadow-sm);
+}
+
 .map-popup {
   display: grid;
   gap: 0;
