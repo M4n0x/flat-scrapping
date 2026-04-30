@@ -33,10 +33,9 @@ On first access, the home page shows the profile list (empty initially). Click *
 
 - **Title** — short profile name (e.g. "Vevey et environs")
 - **Zones** — search and select Swiss municipalities via autocomplete (powered by [geo.admin.ch](https://api3.geo.admin.ch)). Canton, slug, and coordinates are derived automatically.
-- **Budget** — max rent, hard cap, "pearl" threshold
+- **Budget** — min/max rent
 - **Rooms / minimum surface**
 - **Workplace address** — autocomplete search for distance calculation
-- **Pearl detection** — toggle on/off, configure keywords, min rooms/surface, and hit threshold for listings slightly above budget that are worth flagging
 - **Sources** — which feeds to enable (immobilier.ch, flatfox.ch, naef.ch, bernard-nicod.ch, Retraites Populaires locations directes + projets off-market, anibis.ch)
 
 Each profile is independent with its own data and criteria.
@@ -49,7 +48,7 @@ Each profile has its own dashboard at `/{profile}/dashboard`:
 
 - **Table view** — sort by score, price, zone
 - **Kanban view** — tracking pipeline (À contacter → Visite → Dossier → etc.)
-- **Filters** — by priority, pearls, studios
+- **Filters** — by priority and direct-regie listings
 - **Actions** — change status, add notes, delete
 
 ### Running a Scan
@@ -102,9 +101,8 @@ flat-scrapping/
 1. **Scrape** — fetches listings from configured sources
 2. **Deduplication** — by ID (intra-source), then by composite key address + rooms (floored) + surface (±5m²) + price (±50 CHF) for cross-source matching
 3. **Scoring** — each listing gets a 0-100 score based on profile criteria
-4. **Pearl detection** — listings slightly above budget with quality signals (configurable keywords) are flagged as "pearls"
-5. **Tracker** — listings are persisted and their status is tracked across scans
-6. **Dashboard** — real-time display with filters, sorting, and actions
+4. **Tracker** — listings are persisted and their status is tracked across scans
+5. **Dashboard** — real-time display with filters, sorting, and actions
 
 ## Port
 

@@ -64,14 +64,6 @@
                 Loyer max (CHF)
                 <input type="number" id="f-max-rent" value="1400" min="0" step="50" />
               </label>
-              <label>
-                Seuil dur (CHF)
-                <input type="number" id="f-hard-max" value="1550" min="0" step="50" />
-              </label>
-              <label>
-                Seuil perle (CHF)
-                <input type="number" id="f-pearl-max" value="1650" min="0" step="50" />
-              </label>
             </div>
 
             <div class="form-row">
@@ -101,33 +93,6 @@
               </div>
             </label>
 
-            <fieldset class="pearl-fieldset">
-              <legend>Perles (annonces au-dessus du budget mais intéressantes)</legend>
-              <label class="checkbox">
-                <input type="checkbox" id="f-pearl-enabled" checked /> Activer la détection de perles
-              </label>
-              <div id="pearl-options" class="pearl-options">
-                <div class="form-row">
-                  <label>
-                    Min pièces (perle)
-                    <input type="number" id="f-pearl-min-rooms" value="2" min="1" max="10" step="0.5" />
-                  </label>
-                  <label>
-                    Min surface m² (perle)
-                    <input type="number" id="f-pearl-min-surface" value="50" min="0" step="5" />
-                  </label>
-                </div>
-                <label>
-                  Mots-clés perle <small style="color:var(--muted)">(séparés par des virgules)</small>
-                  <input type="text" id="f-pearl-keywords" value="rénové, balcon, terrasse, vue, quartier paisible, lac, centre" placeholder="rénové, balcon, terrasse, vue…" />
-                </label>
-                <label>
-                  Hits minimum <small style="color:var(--muted)">(combien de mots-clés doivent matcher)</small>
-                  <input type="number" id="f-pearl-min-hits" value="1" min="1" max="5" step="1" />
-                </label>
-              </div>
-            </fieldset>
-
             <fieldset class="sources-fieldset">
               <legend>Sources</legend>
               <label class="checkbox"><input type="checkbox" id="s-immobilier" checked /> immobilier.ch</label>
@@ -138,10 +103,6 @@
               <label class="checkbox"><input type="checkbox" id="s-rp-projects" checked /> Retraites Populaires (projets neufs / off-market)</label>
               <label class="checkbox"><input type="checkbox" id="s-anibis" /> anibis.ch</label>
             </fieldset>
-
-            <label class="checkbox">
-              <input type="checkbox" id="f-studio" /> Inclure les plans B (studios / en dessous du min. de pièces)
-            </label>
 
             <div class="form-actions">
               <button type="submit" class="btn primary" id="form-submit">Créer le profil</button>

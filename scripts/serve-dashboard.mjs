@@ -98,11 +98,8 @@ function makeDefaultConfig(profile, base = null) {
     flatfox: { maxPagesPerArea: 3, recheckKnownIdsLimit: 20 },
     filters: {
       maxTotalChf: 1400,
-      maxTotalHardChf: 1550,
-      maxPearlTotalChf: 1650,
       minRoomsPreferred: 2,
       minSurfaceM2Preferred: 0,
-      allowStudioTransition: true,
       excludedObjectTypeKeywords: ['chambre', 'colocation', 'wg'],
       missingScansBeforeRemoved: 2,
       maxPublishedAgeDays: null
@@ -343,19 +340,9 @@ function buildConfigFromPayload(payload) {
     filters: {
       minTotalChf: Number(filters.minTotalChf) || 0,
       maxTotalChf: Number(filters.maxTotalChf) || 1400,
-      maxTotalHardChf: Number(filters.maxTotalHardChf) || 1550,
-      maxPearlTotalChf: Number(filters.maxPearlTotalChf) || 1650,
       minRoomsPreferred: Number(filters.minRoomsPreferred) || 2,
       minSurfaceM2Preferred: Number(filters.minSurfaceM2Preferred) || 0,
       allowMissingSurface: filters.allowMissingSurface !== false,
-      allowStudioTransition: !!filters.allowStudioTransition,
-      pearl: filters.pearl && typeof filters.pearl === 'object' ? {
-        enabled: filters.pearl.enabled !== false,
-        minRooms: Number(filters.pearl.minRooms) || 2,
-        minSurfaceM2: Number(filters.pearl.minSurfaceM2) || 50,
-        keywords: Array.isArray(filters.pearl.keywords) ? filters.pearl.keywords.filter(Boolean) : ['rénové', 'balcon', 'terrasse', 'vue', 'quartier paisible', 'lac', 'centre'],
-        minHits: Number(filters.pearl.minHits) || 1
-      } : { enabled: true, minRooms: 2, minSurfaceM2: 50, keywords: ['rénové', 'balcon', 'terrasse', 'vue', 'quartier paisible', 'lac', 'centre'], minHits: 1 },
       excludedObjectTypeKeywords: Array.isArray(filters.excludedObjectTypeKeywords) && filters.excludedObjectTypeKeywords.length
         ? filters.excludedObjectTypeKeywords.map((x) => String(x).trim()).filter(Boolean)
         : ['chambre', 'colocation', 'wg'],

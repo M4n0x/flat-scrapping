@@ -4,6 +4,11 @@ import path from 'node:path';
 import https from 'node:https';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import {
+  derivePriority,
+  isBudgetEligible,
+  isSizeEligible
+} from './listing-filters.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -453,7 +458,7 @@ function computeScore(item, config) {
     reasons.push(`Pièces: +30 (${rooms} >= ${minRooms})`);
   } else if (rooms >= 1.5) {
     score += 15;
-    reasons.push(`Pièces: +15 (${rooms}, option transition)`);
+    reasons.push(`Pièces: +15 (${rooms}, sous le minimum)`);
   } else {
     score += 5;
     reasons.push(`Pièces: +5 (petite surface)`);
@@ -503,25 +508,6 @@ function computeScore(item, config) {
   return { score, reasons };
 }
 
-function derivePriority(item, config) {
-  const listingStage = String(item?.listingStage || '').toLowerCase();
-  if (listingStage === 'off_market') return 'A';
-  if (listingStage === 'early_market') return 'A-';
-
-  const budget = config.filters?.maxTotalChf ?? 1400;
-  const hardBudget = config.filters?.maxTotalHardChf ?? 1550;
-  const minRooms = config.filters?.minRoomsPreferred ?? 2;
-  const rooms = item.rooms ?? 0;
-  const total = item.totalChf ?? 999999;
-  const isStudio = /studio/i.test(item.objectType || '');
-
-  if (total <= budget && rooms >= minRooms) return 'A';
-  if (total <= budget + 80 && rooms >= minRooms) return 'A-';
-  if (total <= hardBudget && rooms >= minRooms) return 'A-';
-  if (isStudio || rooms < minRooms) return 'B';
-  return 'B';
-}
-
 function isLikelyResidentialListing(item = {}) {
   const text = `${item.objectType || ''} ${item.title || ''}`.toLowerCase();
   const url = String(item?.url || '').toLowerCase();
@@ -541,73 +527,6 @@ function isExcludedType(item, config) {
   const text = `${item.objectType || ''} ${item.title || ''}`.toLowerCase();
   const keywords = config.filters?.excludedObjectTypeKeywords || ['chambre', 'colocation', 'wg'];
   return keywords.some((k) => text.includes(String(k).toLowerCase()));
-}
-
-function isSizeEligible(item, config) {
-  const minRooms = Number(config.filters?.minRoomsPreferred ?? 2);
-  const minSurface = Number(config.filters?.minSurfaceM2Preferred ?? 0);
-  const minSurfaceFallback = Number(config.filters?.minSurfaceM2Fallback ?? 0);
-  const studioAllowed = !!config.filters?.allowStudioTransition;
-  const allowMissingSurface = config.filters?.allowMissingSurface !== false;
-
-  const rooms = Number(item.rooms ?? 0);
-  const surface = Number(item.surfaceM2 ?? 0);
-  const hasSurface = Number.isFinite(item.surfaceM2) && item.surfaceM2 > 0;
-
-  const descriptor = `${item?.objectType || ''} ${item?.title || ''}`.toLowerCase();
-  const looksResidential = /appartement|studio|loft|duplex|attique|maison|pi[eè]ces?/.test(descriptor);
-
-  // Guardrail: invalid/missing room count should not qualify as "plan B" unless clearly residential.
-  if (!Number.isFinite(rooms) || rooms <= 0) {
-    return studioAllowed && looksResidential;
-  }
-
-  const meetsRooms = rooms >= minRooms;
-  const isBelowRooms = rooms < minRooms;
-
-  // Plan B (studio/transition): below min rooms but allowed - skip surface check
-  if (isBelowRooms && studioAllowed) return true;
-
-  // If minSurfaceFallback is set, use OR logic: rooms >= minRooms OR surface >= fallback
-  if (minSurfaceFallback > 0) {
-    const surfaceFallbackOk = hasSurface && surface >= minSurfaceFallback;
-    if (meetsRooms || surfaceFallbackOk) return true;
-    return false;
-  }
-
-  if (!meetsRooms) return false;
-
-  if (!Number.isFinite(minSurface) || minSurface <= 0) return true;
-
-  // If surface is missing, defer to allowMissingSurface setting
-  if (!hasSurface) return allowMissingSurface;
-
-  return surface >= minSurface;
-}
-
-function isPearl(item, config) {
-  const pearlCfg = config.filters?.pearl || {};
-  if (pearlCfg.enabled === false) return false;
-
-  const hardBudget = config.filters?.maxTotalHardChf ?? 1450;
-  const cap = config.filters?.maxPearlTotalChf ?? 1550;
-  const total = item.totalChf;
-  if (total == null || total <= hardBudget || total > cap) return false;
-
-  const minRooms = pearlCfg.minRooms ?? 2;
-  const minSurface = pearlCfg.minSurfaceM2 ?? 50;
-  const rooms = item.rooms ?? 0;
-  const surface = item.surfaceM2 ?? 0;
-  if (rooms < minRooms || surface < minSurface) return false;
-
-  const text = `${item.title || ''} ${item.objectType || ''} ${item.address || ''}`.toLowerCase();
-  const keywords = Array.isArray(pearlCfg.keywords) && pearlCfg.keywords.length
-    ? pearlCfg.keywords
-    : ['renove', 'rénové', 'balcon', 'terrasse', 'vue', 'quartier paisible', 'lac', 'centre'];
-  const minHits = pearlCfg.minHits ?? 1;
-  const hits = keywords.filter((s) => text.includes(String(s).toLowerCase())).length;
-
-  return hits >= minHits;
 }
 
 function normalizeStatus(status = '') {
@@ -2543,12 +2462,9 @@ function makeDefaultConfig(profile, base = null) {
     flatfox: { maxPagesPerArea: 3, recheckKnownIdsLimit: 20 },
     filters: {
       maxTotalChf: isSaintMaurice ? 1700 : 1400,
-      maxTotalHardChf: isSaintMaurice ? 1700 : (isFribourg ? 1650 : 1550),
-      maxPearlTotalChf: isSaintMaurice ? 1700 : (isFribourg ? 1750 : 1650),
       maxPublishedAgeDays: (isFribourg || isSaintMaurice) ? 20 : null,
       minRoomsPreferred: isSaintMaurice ? 3 : (isFribourg ? 2.5 : 2),
       minSurfaceM2Preferred: isFribourg ? 50 : 0,
-      allowStudioTransition: (isFribourg || isSaintMaurice) ? false : true,
       excludedObjectTypeKeywords: ['chambre', 'colocation', 'wg'],
       missingScansBeforeRemoved: 2,
       moveInDeadline: '2026-03-01'
@@ -2584,8 +2500,6 @@ function makeDefaultConfig(profile, base = null) {
   template.filters = {
     ...(template.filters || {}),
     maxTotalChf: Number(template.filters?.maxTotalChf ?? (isSaintMaurice ? 1700 : 1400)),
-    maxTotalHardChf: Number(template.filters?.maxTotalHardChf ?? (isSaintMaurice ? 1700 : (isFribourg ? 1650 : 1550))),
-    maxPearlTotalChf: Number(template.filters?.maxPearlTotalChf ?? (isSaintMaurice ? 1700 : (isFribourg ? 1750 : 1650))),
     minRoomsPreferred: Number(template.filters?.minRoomsPreferred ?? (isSaintMaurice ? 3 : (isFribourg ? 2.5 : 2))),
     maxPublishedAgeDays: (isFribourg || isSaintMaurice)
       ? Number(template.filters?.maxPublishedAgeDays ?? 20)
@@ -2596,12 +2510,7 @@ function makeDefaultConfig(profile, base = null) {
     template.filters = {
       ...(template.filters || {}),
       maxTotalChf: Number(template.filters?.maxTotalChf ?? 1700),
-      maxTotalHardChf: Number(template.filters?.maxTotalHardChf ?? 1700),
-      maxPearlTotalChf: Number(template.filters?.maxPearlTotalChf ?? 1700),
       minRoomsPreferred: Number(template.filters?.minRoomsPreferred ?? 3),
-      allowStudioTransition: template.filters?.allowStudioTransition === undefined
-        ? false
-        : !!template.filters?.allowStudioTransition,
       maxPublishedAgeDays: template.filters?.maxPublishedAgeDays == null
         ? 20
         : Number(template.filters?.maxPublishedAgeDays)
@@ -2679,12 +2588,7 @@ async function main() {
     config.filters = {
       ...(config.filters || {}),
       maxTotalChf: Number(config.filters?.maxTotalChf ?? 1700),
-      maxTotalHardChf: Number(config.filters?.maxTotalHardChf ?? 1700),
-      maxPearlTotalChf: Number(config.filters?.maxPearlTotalChf ?? 1700),
       minRoomsPreferred: Number(config.filters?.minRoomsPreferred ?? 3),
-      allowStudioTransition: config.filters?.allowStudioTransition === undefined
-        ? false
-        : !!config.filters?.allowStudioTransition,
       maxPublishedAgeDays: config.filters?.maxPublishedAgeDays == null
         ? 20
         : Number(config.filters?.maxPublishedAgeDays)
@@ -2826,11 +2730,12 @@ async function main() {
     item.lastSeenAt = now;
 
     const minBudget = Number(config.filters?.minTotalChf ?? 0);
-    const hardBudget = config.filters?.maxTotalHardChf ?? 1450;
+    const maxBudget = Number(config.filters?.maxTotalChf ?? 1400);
     item.excludedType = isExcludedType(item, config);
     item.sizeEligible = isSizeEligible(item, config);
-    item.isPearl = isPearl(item, config);
-    item.withinHardBudget = item.totalChf != null ? item.totalChf <= hardBudget : false;
+    item.budgetEligible = isBudgetEligible(item, config);
+    item.isPearl = false;
+    item.withinHardBudget = item.budgetEligible;
     item.aboveMinBudget = minBudget <= 0 || (item.totalChf != null && item.totalChf >= minBudget);
 
     const publicationMeta = publicationEligibility(item, config);
@@ -2853,14 +2758,10 @@ async function main() {
       : (!item.excludedType
         && item.sizeEligible
         && item.aboveMinBudget
-        && (item.withinHardBudget || item.isPearl)
+        && item.budgetEligible
         && item.publicationEligible
         && item.locationEligible
         && item.nonSpeculativeEligible);
-
-    if (item.isPearl && !item.withinHardBudget) {
-      item.priority = 'A★';
-    }
 
     if (item.display) {
       if (item.source === 'immobilier.ch') {
@@ -2909,7 +2810,7 @@ async function main() {
       else if (!item.sizeEligible) item.filterReason = 'Taille non prioritaire';
       else if (!item.publicationEligible) {
         item.filterReason = `Annonce trop ancienne (> ${item.maxPublishedAgeDays} jours)`;
-      } else item.filterReason = `Au-dessus de CHF ${hardBudget}`;
+      } else item.filterReason = `Au-dessus de CHF ${maxBudget}`;
     } else {
       item.filterReason = '';
     }
@@ -3045,7 +2946,7 @@ async function main() {
       }
 
       const minBudget = Number(config.filters?.minTotalChf ?? 0);
-      const hardBudget = config.filters?.maxTotalHardChf ?? 1450;
+      const maxBudget = Number(config.filters?.maxTotalChf ?? 1400);
 
       const publicationMeta = publicationEligibility(old, config);
       const locationMeta = locationEligibility(old, config);
@@ -3054,8 +2955,9 @@ async function main() {
       const refreshed = {
         excludedType: isExcludedType(old, config),
         sizeEligible: isSizeEligible(old, config),
-        isPearl: isPearl(old, config),
-        withinHardBudget: old.totalChf != null ? old.totalChf <= hardBudget : false,
+        budgetEligible: isBudgetEligible(old, config),
+        isPearl: false,
+        withinHardBudget: isBudgetEligible(old, config),
         aboveMinBudget: minBudget <= 0 || (old.totalChf != null && old.totalChf >= minBudget),
         publishedAgeDays: publicationMeta.ageDays,
         maxPublishedAgeDays: publicationMeta.maxAgeDays,
@@ -3073,12 +2975,12 @@ async function main() {
         : (!refreshed.excludedType
           && refreshed.sizeEligible
           && refreshed.aboveMinBudget
-          && (refreshed.withinHardBudget || refreshed.isPearl)
+          && refreshed.budgetEligible
           && refreshed.publicationEligible
           && refreshed.locationEligible
           && refreshed.nonSpeculativeEligible);
 
-      refreshed.priority = refreshed.isPearl && !refreshed.withinHardBudget ? 'A★' : derivePriority(old, config);
+      refreshed.priority = derivePriority(old, config);
 
       if (!refreshed.display) {
         if (refreshed.excludedType) refreshed.filterReason = 'Type exclu (chambre/colocation)';
@@ -3089,7 +2991,7 @@ async function main() {
         else if (!refreshed.sizeEligible) refreshed.filterReason = 'Taille non prioritaire';
         else if (!refreshed.publicationEligible) {
           refreshed.filterReason = `Annonce trop ancienne (> ${refreshed.maxPublishedAgeDays} jours)`;
-        } else refreshed.filterReason = `Au-dessus de CHF ${hardBudget}`;
+        } else refreshed.filterReason = `Au-dessus de CHF ${maxBudget}`;
       } else {
         refreshed.filterReason = '';
       }
