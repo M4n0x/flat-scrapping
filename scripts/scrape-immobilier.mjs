@@ -10,6 +10,7 @@ import {
   isSizeEligible
 } from './listing-filters.mjs';
 import { migrateStatus, DEFAULT_STATUS } from './status.mjs';
+import { migrateTracker } from './tracker-migration.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2607,11 +2608,12 @@ async function main() {
   const previousLatest = await readJsonSafe(LATEST_PATH, { all: [] });
   const prevIds = new Set((previousLatest.all || []).map((x) => String(x.id)));
 
-  const tracker = await readJsonSafe(TRACKER_PATH, {
+  const trackerOnDisk = await readJsonSafe(TRACKER_PATH, {
     schemaVersion: 2,
     createdAt: new Date().toISOString(),
     listings: []
   });
+  const { tracker } = migrateTracker(trackerOnDisk);
 
   const trackerMap = toMap(tracker.listings || []);
   const targetAreaSet = buildTargetAreaSet(config.areas || []);
@@ -3100,8 +3102,10 @@ async function main() {
     all: visibleAll
   };
 
+  // eslint-disable-next-line no-unused-vars
+  const { statuses: _statuses, ...trackerBase } = tracker;
   const newTracker = {
-    ...tracker,
+    ...trackerBase,
     schemaVersion: 2,
     updatedAt: now,
     criteria: config,
