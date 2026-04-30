@@ -147,10 +147,7 @@ export function resolveListingCoordinates(item = {}, geocodeCache = {}) {
 }
 
 function isMapVisibleListing(item = {}) {
-  return item.active === true
-    && item.display !== false
-    && item.isRemoved !== true
-    && String(item.status || '').trim() !== 'Refusé';
+  return item.active === true && item.display !== false;
 }
 
 function compactListing(item, profile, coords) {
@@ -169,7 +166,12 @@ function compactListing(item, profile, coords) {
     url: item.url || '',
     imageUrls: listingImageUrls(item),
     lat: coords.lat,
-    lon: coords.lon
+    lon: coords.lon,
+    status: typeof item.status === 'string' ? item.status : '',
+    priority: typeof item.priority === 'string' ? item.priority : '',
+    score: toNumberOrNull(item.score),
+    firstSeenAt: item.firstSeenAt || null,
+    viewedAt: item.viewedAt || null
   };
 }
 
