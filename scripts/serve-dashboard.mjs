@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildMapListingsPayload } from './map-listings.mjs';
 import { migrateTracker, TRACKER_SCHEMA_VERSION } from './tracker-migration.mjs';
+import { isValidStatus } from './status.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -499,6 +500,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const raw = await readBody(req);
       const body = JSON.parse(raw || '{}');
+      if (!isValidStatus(body.status)) {
+        return sendJson(res, 400, { ok: false, error: 'Statut invalide' });
+      }
       const ok = await updateStatus(profile, body.id, body.status, body.notes);
       return sendJson(res, ok ? 200 : 404, { ok });
     } catch (err) {
