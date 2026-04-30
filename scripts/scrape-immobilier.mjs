@@ -59,7 +59,6 @@ const {
   routeCachePath: ROUTE_CACHE_PATH
 } = profilePaths(PROFILE);
 
-const STATUSES = ['À contacter', 'Visite', 'Dossier', 'Relance', 'Accepté', 'Refusé', 'Sans réponse'];
 const SOURCE_PRIORITY = {
   'immobilier.ch': 30,
   'naef.ch': 27,
@@ -2609,8 +2608,8 @@ async function main() {
   const prevIds = new Set((previousLatest.all || []).map((x) => String(x.id)));
 
   const tracker = await readJsonSafe(TRACKER_PATH, {
+    schemaVersion: 2,
     createdAt: new Date().toISOString(),
-    statuses: STATUSES,
     listings: []
   });
 
@@ -3103,9 +3102,9 @@ async function main() {
 
   const newTracker = {
     ...tracker,
+    schemaVersion: 2,
     updatedAt: now,
     criteria: config,
-    statuses: STATUSES,
     listings: merged
   };
 
