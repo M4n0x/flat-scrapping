@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises';
+import * as fsRaw from 'node:fs';
 import path from 'node:path';
 import https from 'node:https';
 import crypto from 'node:crypto';
@@ -36,6 +37,48 @@ function parseProfileFromArgv(argv = process.argv.slice(2)) {
     }
   }
   return null;
+}
+
+function parseEventsFdFromArgv(argv = process.argv.slice(2)) {
+  for (const arg of argv) {
+    const match = String(arg || '').match(/^--events-fd=(\d+)$/);
+    if (match) {
+      const fd = Number(match[1]);
+      return Number.isInteger(fd) && fd >= 3 ? fd : null;
+    }
+  }
+  return null;
+}
+
+let eventsStream = null;
+let eventsStreamReady = false;
+
+function ensureEventsStream() {
+  if (eventsStreamReady) return eventsStream;
+  eventsStreamReady = true;
+  const fd = parseEventsFdFromArgv();
+  if (fd == null) {
+    eventsStream = null;
+    return null;
+  }
+  try {
+    eventsStream = fsRaw.createWriteStream(null, { fd });
+    eventsStream.on('error', () => { eventsStream = null; });
+  } catch {
+    eventsStream = null;
+  }
+  return eventsStream;
+}
+
+export function emitEvent(payload) {
+  const stream = ensureEventsStream();
+  if (!stream) return;
+  try {
+    const line = JSON.stringify({ ...payload, at: payload.at || new Date().toISOString() });
+    stream.write(line + '\n');
+  } catch {
+    // events are best-effort — never let them crash a scan
+  }
 }
 
 function profilePaths(profile) {
