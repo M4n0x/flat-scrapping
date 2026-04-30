@@ -108,6 +108,20 @@ let activeScoreTrigger = null;
 let scorePopoverGlobalBound = false;
 let activeCardFilter = 'all';
 
+const STATUS_LABELS = {
+  contact: 'À contacter',
+  visite: 'Visite',
+  dossier: 'Dossier',
+  relance: 'Relance',
+  accepte: 'Accepté',
+  refuse: 'Refusé',
+  aucune: '—'
+};
+function formatPrice(n) {
+  if (n == null || isNaN(n)) return '—';
+  return Math.round(n).toLocaleString('fr-CH').replace(/ |\s/g, "'");
+}
+
 function money(v) {
   if (v == null) return 'n/a';
   return `CHF ${new Intl.NumberFormat('fr-CH').format(v)}`;
@@ -754,6 +768,45 @@ function isRefused(item) {
   return !item.isRemoved && (item.status || '') === 'Refusé';
 }
 
+function buildTableRow(item) {
+  const tr = document.createElement('tr');
+  tr.dataset.id = item.id;
+
+  const priority = item.priority || 'B';
+  const score = item.score ?? '—';
+  const status = item.status || '—';
+  const isDirect = String(item.listingStage || '').toLowerCase() === 'early_market'
+    || String(item.listingStage || '').toLowerCase() === 'off_market';
+  const isNew = isNewToday(item) && !item.isRemoved;
+
+  const directBadge  = isDirect ? '<span class="badge badge-direct">Régie directe</span>' : '';
+  const newBadge     = isNew ? '<span class="badge badge-new">Nouveau</span>' : '';
+  const removedBadge = item.isRemoved ? '<span class="badge badge-removed">Retirée</span>' : '';
+
+  tr.innerHTML = `
+    <td><div class="pri-bar" data-priority="${escapeHtml(priority)}"></div></td>
+    <td><div class="thumb" data-thumb></div></td>
+    <td>
+      <div class="addr-main">${escapeHtml(item.address || item.objectType || item.title || '—')}</div>
+      <div class="addr-sub">${escapeHtml(item.area || '')} · ${escapeHtml(String(item.rooms ?? '?'))} pièces · ${escapeHtml(String(item.surfaceM2 ?? '?'))} m² ${directBadge}${newBadge}${removedBadge}</div>
+    </td>
+    <td class="price">CHF ${escapeHtml(formatPrice(item.totalChf))}</td>
+    <td>${item.driveMinutes ? `${escapeHtml(String(Math.round(item.driveMinutes)))} min` : '—'}</td>
+    <td><span class="badge badge-score">${escapeHtml(String(score))}</span></td>
+    <td><span class="status-pill" data-status="${escapeHtml(status)}">${escapeHtml(status)}</span></td>
+    <td><button class="row-actions" data-action-menu type="button" aria-label="Actions">⋯</button></td>
+  `;
+
+  // Apply thumb URL via DOM property to avoid HTML injection through the URL
+  const thumbUrl = getImageUrls(item)[0];
+  if (thumbUrl) {
+    const thumbEl = tr.querySelector('[data-thumb]');
+    thumbEl.style.backgroundImage = `url(${JSON.stringify(thumbUrl)})`;
+  }
+
+  return tr;
+}
+
 function createUrgencyBadge(item) {
   const urgency = getUrgency(item);
   const badge = document.createElement('span');
@@ -768,92 +821,43 @@ function renderDesktop(listings) {
 
   if (!listings.length) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="10"><div class="empty">Aucune annonce ne correspond aux filtres.</div></td>`;
+    tr.innerHTML = `<td colspan="8"><div class="empty">Aucune annonce ne correspond aux filtres.</div></td>`;
     rowsEl.appendChild(tr);
     return;
   }
 
   for (const item of listings) {
-    const tr = document.createElement('tr');
+    const tr = buildTableRow(item);
     if (item.isRemoved) tr.classList.add('row-removed');
     if (isRefused(item)) tr.classList.add('row-refused');
     if (isNewToday(item) && !item.isRemoved) tr.classList.add('row-new');
-
-    const tdPriority = document.createElement('td');
-    tdPriority.innerHTML = `<span class="tag">${item.priority || '-'}</span>`;
-
-    const tdScore = document.createElement('td');
-    tdScore.appendChild(createScoreDisplay(item));
-
-    const tdImage = document.createElement('td');
-    tdImage.appendChild(createThumbCell(item));
-
-    const tdInfo = document.createElement('td');
-    tdInfo.innerHTML = `<a href="${item.url}" target="_blank" rel="noreferrer">${item.objectType || item.title}</a><div class="small">${item.address || ''}${sourceMetaHtml(item) ? ` · ${sourceMetaHtml(item)}` : ''}</div>${stateBadgesHtml(item)}`;
-
-    const tdPrice = document.createElement('td');
-    tdPrice.innerHTML = `<div>${money(item.totalChf)}</div><div class="small">${item.priceRaw || ''}</div>`;
-
-    const tdPublished = document.createElement('td');
-    tdPublished.textContent = publishedLabel(item);
-    tdPublished.title = publishedTitle(item);
-
-    const tdDistance = document.createElement('td');
-    tdDistance.appendChild(createTravelCell(item));
-
-    const tdStatus = document.createElement('td');
-    const select = createStatusSelect(item);
-    if (item.isRemoved) select.disabled = true;
-    tdStatus.appendChild(select);
-
-    const tdNotes = document.createElement('td');
-    const notesInput = document.createElement('input');
-    notesInput.value = item.notes || '';
-    notesInput.placeholder = 'notes';
-    if (item.isRemoved) notesInput.disabled = true;
-    tdNotes.appendChild(notesInput);
-
-    if (!item.isRemoved) {
-      select.addEventListener('change', async () => {
-        select.disabled = true;
-        await updateStatus(item.id, select.value, notesInput.value);
-        await load();
-      });
-    }
-
-    const tdAction = document.createElement('td');
-    const actionCell = document.createElement('div');
-    actionCell.className = 'action-cell';
-
-    if (item.isRemoved) {
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'save-inline danger';
-      deleteBtn.textContent = 'Supprimer';
-      deleteBtn.addEventListener('click', async () => {
-        const okConfirm = window.confirm('Supprimer cette annonce retirée du suivi ?');
-        if (!okConfirm) return;
-        deleteBtn.disabled = true;
-        deleteBtn.textContent = '…';
-        const ok = await deleteListing(item.id);
-        if (ok) await load();
-        else {
-          deleteBtn.disabled = false;
-          deleteBtn.textContent = 'Supprimer';
-        }
-      });
-      actionCell.appendChild(deleteBtn);
-    } else {
-      const pinBtn = createPinButton(item);
-      const saveBtn = createSaveButton(() => updateStatus(item.id, select.value, notesInput.value));
-      actionCell.append(pinBtn, saveBtn);
-    }
-
-    tdAction.appendChild(actionCell);
-
     if (item.pinned) tr.classList.add('row-pinned');
-    tr.append(tdPriority, tdScore, tdImage, tdInfo, tdPrice, tdPublished, tdDistance, tdStatus, tdNotes, tdAction);
     rowsEl.appendChild(tr);
   }
+}
+
+function buildKanbanCard(item) {
+  const el = document.createElement('div');
+  el.className = 'kanban-card';
+  el.dataset.id = item.id;
+  el.innerHTML = `
+    <div class="price">CHF ${escapeHtml(formatPrice(item.totalChf))}</div>
+    <div class="meta">${escapeHtml(item.address || item.objectType || item.title || '—')} · ${escapeHtml(String(item.rooms ?? '?'))}p · ${escapeHtml(String(item.surfaceM2 ?? '?'))}m²</div>
+    <div class="meta">Score ${escapeHtml(String(item.score ?? '—'))} · ${item.driveMinutes ? `${escapeHtml(String(Math.round(item.driveMinutes)))} min` : '—'}</div>
+  `;
+  return el;
+}
+
+function buildKanbanColumn(label, count) {
+  const col = document.createElement('section');
+  col.className = 'kanban-col';
+  col.innerHTML = `
+    <header class="kanban-col-head">
+      <div class="kanban-col-title">${escapeHtml(label)}</div>
+      <span class="kanban-col-count">${escapeHtml(String(count))}</span>
+    </header>
+  `;
+  return col;
 }
 
 function renderKanban(listings) {
@@ -876,13 +880,7 @@ function renderKanban(listings) {
       ? listings.filter((x) => x.isRemoved)
       : listings.filter((x) => !x.isRemoved && (x.status || 'À contacter') === status);
 
-    const col = document.createElement('section');
-    col.className = 'kanban-col';
-
-    const head = document.createElement('header');
-    head.className = 'kanban-head';
-    head.innerHTML = `<h3>${status}</h3><span>${colItems.length}</span>`;
-    col.appendChild(head);
+    const col = buildKanbanColumn(status, colItems.length);
 
     const body = document.createElement('div');
     body.className = 'kanban-items';
@@ -898,8 +896,7 @@ function renderKanban(listings) {
     }
 
     for (const item of colItems) {
-      const kCard = document.createElement('article');
-      kCard.className = 'k-card';
+      const kCard = buildKanbanCard(item);
       if (item.isRemoved) kCard.classList.add('removed');
       if (isRefused(item)) kCard.classList.add('refused');
       if (isNewToday(item) && !item.isRemoved) kCard.classList.add('new');
@@ -907,7 +904,6 @@ function renderKanban(listings) {
 
       if (!item.isRemoved) {
         kCard.draggable = true;
-        kCard.dataset.id = String(item.id);
 
         kCard.addEventListener('dragstart', (event) => {
           draggedKanbanId = String(item.id);
@@ -921,51 +917,6 @@ function renderKanban(listings) {
           kCard.classList.remove('dragging');
           clearKanbanDropTargets();
         });
-      }
-
-      const urls = getImageUrls(item);
-      const cover = urls[0] || '';
-
-      kCard.innerHTML = `
-        ${cover ? `<img class="k-cover" src="${cover}" alt="Aperçu ${item.objectType || item.title}" loading="lazy" />` : '<div class="k-cover"></div>'}
-        <div class="k-body">
-          <div class="k-meta-top">
-            <span class="tag">${item.priority || '-'}</span>
-            ${scoreMiniHtml(item)}
-            <span class="k-price">${money(item.totalChf)}</span>
-          </div>
-          <a href="${item.url}" target="_blank" rel="noreferrer" class="k-title">${item.objectType || item.title}</a>
-          <div class="k-sub">${item.area || '-'} · ${item.address || ''}${sourceMetaHtml(item) ? ` · ${sourceMetaHtml(item)}` : ''}</div>
-          <div class="k-distance">${travelInlineLabel(item)}</div>
-          <div class="k-sub">Publié: ${publishedLabel(item)}</div>
-          ${stateBadgesHtml(item)}
-          <div class="k-bottom"></div>
-        </div>
-      `;
-
-      const coverEl = kCard.querySelector('.k-cover');
-      if (coverEl && urls.length) {
-        coverEl.style.cursor = 'pointer';
-        coverEl.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); lightbox.show(urls, 0); });
-      }
-
-      const bottom = kCard.querySelector('.k-bottom');
-      const urgency = createUrgencyBadge(item);
-      bottom.appendChild(urgency);
-
-      if (urls.length > 1) {
-        const mini = document.createElement('div');
-        mini.className = 'k-mini-strip';
-        urls.slice(1, 4).forEach((src, i) => {
-          const im = document.createElement('img');
-          im.src = src;
-          im.loading = 'lazy';
-          im.alt = 'miniature';
-          im.style.cursor = 'pointer';
-          im.addEventListener('click', (e) => { e.stopPropagation(); lightbox.show(urls, i + 1); });
-          mini.appendChild(im);
-        });
-        bottom.appendChild(mini);
       }
 
       const actions = document.createElement('div');
@@ -1010,7 +961,7 @@ function renderKanban(listings) {
         actions.append(retired, del);
       }
 
-      kCard.querySelector('.k-body').appendChild(actions);
+      kCard.appendChild(actions);
 
       body.appendChild(kCard);
     }
