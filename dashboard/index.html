@@ -16,99 +16,92 @@
     <link rel="stylesheet" href="/dashboard/styles.css" />
   </head>
   <body>
-    <div class="bg-layer" aria-hidden="true"></div>
+    <!-- Sticky top bar -->
+    <header class="topbar">
+      <a href="/" class="brand"><span class="brand-dot"></span>Apartment Ops</a>
+      <select id="profile-switcher" class="select-trigger" aria-label="Changer de profil"></select>
+      <span class="grow"></span>
+      <span id="last-scan" class="last-scan hidden">Dernier scan…</span>
+      <button id="refresh" class="btn btn-ghost btn-sm" type="button">Rafraîchir</button>
+      <button id="scan" class="btn btn-primary btn-sm" type="button">Scanner</button>
+    </header>
 
-    <main class="app-shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">Apartment Ops</p>
-          <h1>Chargement du profil…</h1>
-          <p id="zones" class="sub"></p>
-          <p id="sub" class="sub"></p>
+    <!-- Page header -->
+    <section class="page-header">
+      <div>
+        <h1 id="page-title">Chargement du profil…</h1>
+        <p id="page-meta" class="meta"></p>
+      </div>
+    </section>
+
+    <!-- KPIs -->
+    <section class="kpi-row" id="kpis"></section>
+
+    <!-- Toolbar: tabs + search + filter + sort -->
+    <section class="toolbar">
+      <div class="tabs" role="tablist" aria-label="Changer de vue">
+        <button id="tab-table"  class="tab active" type="button" role="tab" data-view="table"  aria-selected="true">Table</button>
+        <button id="tab-kanban" class="tab"        type="button" role="tab" data-view="kanban" aria-selected="false">Kanban</button>
+      </div>
+      <label class="search">
+        <span class="search-icon" aria-hidden="true">🔍</span>
+        <input id="search-box" type="search" placeholder="Recherche par adresse, type, zone…" />
+      </label>
+      <span class="grow"></span>
+      <select id="priority-filter" class="select-trigger" aria-label="Filtre">
+        <option value="all">Toutes</option>
+        <option value="top">Priorité A</option>
+        <option value="direct">Régie directe</option>
+      </select>
+      <select id="sort-by" class="select-trigger" aria-label="Trier">
+        <option value="score">Trier · Score</option>
+        <option value="price">Trier · Loyer</option>
+        <option value="area">Trier · Zone</option>
+        <option value="date">Trier · Date</option>
+      </select>
+    </section>
+
+    <!-- Main content -->
+    <main class="page-content">
+      <div id="panel-table" class="view-panel active">
+        <div class="table-wrap">
+          <table class="table listings-table">
+            <thead>
+              <tr>
+                <th style="width:8px"></th>
+                <th style="width:70px"></th>
+                <th>Bien</th>
+                <th style="width:110px">Loyer</th>
+                <th style="width:110px">Trajet</th>
+                <th style="width:80px">Score</th>
+                <th style="width:140px">Statut</th>
+                <th style="width:32px"></th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
         </div>
+        <section class="mobile-board" id="mobile-rows"></section>
+      </div>
 
-        <div class="actions">
-          <select id="profile-switcher" class="profile-switcher" aria-label="Changer de profil"></select>
-          <button id="refresh" class="btn ghost">Rafraîchir</button>
-          <button id="scan" class="btn primary">Scanner</button>
-        </div>
-      </header>
-
-      <pre id="scan-output" class="scan-output hidden"></pre>
-
-      <section class="cards" id="cards"></section>
-
-      <section class="control-bar">
-        <label>
-          Filtre
-          <select id="priority-filter">
-            <option value="all">Toutes</option>
-            <option value="top">Priorité A</option>
-            <option value="direct">Régie directe</option>
-          </select>
-        </label>
-
-        <label>
-          Trier
-          <select id="sort-by">
-            <option value="score">Score</option>
-            <option value="price">Loyer</option>
-            <option value="area">Zone</option>
-            <option value="date">Date de publication</option>
-          </select>
-        </label>
-
-        <label class="search-wrap">
-          Recherche
-          <input id="search-box" type="search" placeholder="adresse, type, zone…" />
-        </label>
-      </section>
-
-      <section class="view-tabs-wrap">
-        <nav class="view-tabs" aria-label="Changer de vue">
-          <button id="tab-table" class="view-tab active" data-view="table" type="button">Vue tableau</button>
-          <button id="tab-kanban" class="view-tab" data-view="kanban" type="button">Vue kanban</button>
-        </nav>
-
-        <div id="panel-table" class="view-panel active">
-          <section class="desktop-board">
-            <div class="section-head compact">
-              <h2>Table détaillée</h2>
-              <p>Vue complète pour tri fin et prise de notes.</p>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Priorité</th>
-                  <th>Score</th>
-                  <th>Image</th>
-                  <th>Bien</th>
-                  <th>Loyer total</th>
-                  <th>Publié</th>
-                  <th>Distance travail</th>
-                  <th>Statut</th>
-                  <th>Notes</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="rows"></tbody>
-            </table>
-          </section>
-
-          <section class="mobile-board" id="mobile-rows"></section>
-        </div>
-
-        <div id="panel-kanban" class="view-panel">
-          <section class="kanban-wrap">
-            <div class="section-head">
-              <h2>Kanban pipeline</h2>
-              <p>Vision rapide par statut + actions directes.</p>
-            </div>
-            <div id="kanban-board" class="kanban-board"></div>
-          </section>
-        </div>
-      </section>
+      <div id="panel-kanban" class="view-panel">
+        <div id="kanban-board" class="kanban-board"></div>
+      </div>
     </main>
+
+    <!-- Scan output dialog (was an inline <pre>) -->
+    <div id="scan-dialog" class="dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="scan-dialog-title">
+      <div class="dialog-panel">
+        <div class="dialog-head">
+          <div>
+            <h2 id="scan-dialog-title">Scan en cours</h2>
+            <p class="dialog-sub">Sortie du scraper</p>
+          </div>
+          <button class="dialog-close" type="button" data-close-dialog aria-label="Fermer">✕</button>
+        </div>
+        <pre id="scan-output" class="scan-output"></pre>
+      </div>
+    </div>
 
     <script type="module" src="/dashboard/app.js"></script>
   </body>
