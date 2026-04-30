@@ -760,6 +760,14 @@ function buildTableRow(item) {
     });
   }
 
+  const menuBtn = tr.querySelector('[data-action-menu]');
+  if (menuBtn) {
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openRowActionMenu(menuBtn, item);
+    });
+  }
+
   return tr;
 }
 
@@ -1292,5 +1300,92 @@ const lightbox = (() => {
 
   return { show, hide };
 })();
+
+// ---------- Row action menu (popover) ----------
+const rowActionMenu = (() => {
+  const menu = document.createElement('div');
+  menu.className = 'row-action-menu hidden';
+  menu.setAttribute('role', 'menu');
+  document.body.appendChild(menu);
+
+  let currentAnchor = null;
+
+  function close() {
+    menu.classList.add('hidden');
+    currentAnchor = null;
+  }
+
+  function open(anchorEl, item) {
+    currentAnchor = anchorEl;
+    const pinLabel = item.pinned ? 'Désépingler' : 'Épingler en haut';
+    const orderedStatuses = (statuses && statuses.length
+      ? statuses
+      : ['À contacter', 'Visite', 'Dossier', 'Relance', 'Accepté', 'Refusé', 'Sans réponse']);
+    const currentStatus = item.status || 'À contacter';
+
+    menu.innerHTML = `
+      <button class="row-action-item" data-act="pin" type="button">${escapeHtml(pinLabel)}</button>
+      <div class="row-action-sep"></div>
+      <div class="row-action-section-label">Changer le statut</div>
+      ${orderedStatuses.map((s) => `
+        <button class="row-action-item ${s === currentStatus ? 'is-current' : ''}" data-act="status" data-value="${escapeHtml(s)}" type="button" ${s === currentStatus ? 'aria-current="true"' : ''}>
+          ${escapeHtml(s)}
+        </button>
+      `).join('')}
+      <div class="row-action-sep"></div>
+      <button class="row-action-item danger" data-act="delete" type="button">Supprimer du suivi</button>
+    `;
+
+    // Position below button, right-aligned
+    const rect = anchorEl.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
+    menu.style.right = `${document.documentElement.clientWidth - rect.right - window.scrollX}px`;
+    menu.style.left = 'auto';
+    menu.classList.remove('hidden');
+
+    // Wire actions
+    menu.querySelectorAll('[data-act]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        close();
+        if (act === 'pin') {
+          await togglePin(item.id);
+          await load();
+        } else if (act === 'status') {
+          const newStatus = btn.dataset.value;
+          if (newStatus !== currentStatus) {
+            await updateStatus(item.id, newStatus, item.notes || '');
+            await load();
+          }
+        } else if (act === 'delete') {
+          const okConfirm = window.confirm(`Supprimer cette annonce du suivi ?`);
+          if (!okConfirm) return;
+          const ok = await deleteListing(item.id);
+          if (ok) await load();
+        }
+      });
+    });
+  }
+
+  // Click outside, Escape, scroll → close
+  document.addEventListener('click', (e) => {
+    if (!menu.classList.contains('hidden') && !menu.contains(e.target) && e.target !== currentAnchor) {
+      close();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !menu.classList.contains('hidden')) close();
+  });
+  window.addEventListener('scroll', () => {
+    if (!menu.classList.contains('hidden')) close();
+  }, true);
+
+  return { open, close };
+})();
+
+function openRowActionMenu(anchorEl, item) {
+  rowActionMenu.open(anchorEl, item);
+}
 
 load();
