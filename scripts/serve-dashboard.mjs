@@ -250,8 +250,8 @@ async function deleteListing(profile, id) {
     latest.all = latest.all.filter((x) => String(x.id) !== String(id));
     latest.matching = (latest.matching || []).filter((x) => String(x.id) !== String(id));
     latest.newListings = (latest.newListings || []).filter((x) => String(x.id) !== String(id));
-    latest.totalCount = (latest.all || []).filter((x) => !x.isRemoved).length;
-    latest.removedCount = (latest.all || []).filter((x) => x.isRemoved).length;
+    latest.totalCount = (latest.all || []).filter((x) => x.status !== 'archived').length;
+    latest.removedCount = (latest.all || []).filter((x) => x.status === 'archived').length;
     latest.matchingCount = latest.matching.length;
     latest.newCount = latest.newListings.length;
     await fs.writeFile(paths.latestPath, JSON.stringify(latest, null, 2));
@@ -295,7 +295,7 @@ async function listProfiles() {
       const latestPath = path.join(PROFILES_DATA_DIR, entry.name, 'latest-listings.json');
       const tracker = await readJsonSafe(trackerPath, { listings: [] });
       const latest = await readJsonSafe(latestPath, {});
-      const listingsCount = (tracker.listings || []).filter((x) => !x.isRemoved).length;
+      const listingsCount = (tracker.listings || []).filter((x) => x.status !== 'archived').length;
       profiles.push({
         slug: entry.name,
         name: cfg.name || entry.name,
@@ -472,7 +472,7 @@ const server = http.createServer(async (req, res) => {
     const paths = await ensureProfileStorage(profile);
 
     const [tracker, latest, config] = await Promise.all([
-      readJsonSafe(paths.trackerPath, { listings: [], statuses: [] }),
+      readJsonSafe(paths.trackerPath, { schemaVersion: TRACKER_SCHEMA_VERSION, listings: [] }),
       readJsonSafe(paths.latestPath, { all: [], matching: [], generatedAt: null, newCount: 0 }),
       readJsonSafe(paths.configPath, { areas: [] })
     ]);
