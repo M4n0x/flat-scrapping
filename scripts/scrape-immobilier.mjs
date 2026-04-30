@@ -2857,7 +2857,6 @@ async function main() {
         notes: mergeNotesWithEntryDate(existing.notes || '', entryDateText),
         firstSeenAt: existing.firstSeenAt || now,
         active: true,
-        isRemoved: false,
         removedAt: null,
         missingCount: 0,
         isNew: !prevIds.has(String(item.id))
@@ -2877,11 +2876,10 @@ async function main() {
         mapLon: item.mapLon ?? null,
         mapAddress: item.mapAddress || '',
         publishedAt: item.publishedAt || null,
-        status: 'À contacter',
+        status: 'sorting',
         notes: mergeNotesWithEntryDate('', entryDateText),
         firstSeenAt: now,
         active: true,
-        isRemoved: false,
         removedAt: null,
         missingCount: 0,
         isNew: true
@@ -2896,9 +2894,8 @@ async function main() {
       if (crossSourceRemovedIds.has(String(old.id))) {
         merged.push({
           ...old,
-          status: normalizeStatus(old.status),
+          status: 'archived',
           active: false,
-          isRemoved: true,
           removedAt: old.removedAt || now,
           missingCount: 0,
           isNew: false,
@@ -2917,7 +2914,6 @@ async function main() {
           ...old,
           status: normalizeStatus(old.status),
           active: false,
-          isRemoved: false,
           removedAt: old.removedAt || null,
           missingCount: nextMissing,
           isNew: false,
@@ -2933,9 +2929,8 @@ async function main() {
       if (nonResidentialDirectSource) {
         merged.push({
           ...old,
-          status: normalizeStatus(old.status),
+          status: 'archived',
           active: false,
-          isRemoved: true,
           removedAt: old.removedAt || now,
           missingCount: nextMissing,
           isNew: false,
@@ -3020,9 +3015,8 @@ async function main() {
       if (duplicateOfActive || excludedAnibisSale || anibisSourceDisabled) {
         merged.push({
           ...old,
-          status: normalizeStatus(old.status),
+          status: 'archived',
           active: false,
-          isRemoved: true,
           removedAt: old.removedAt || now,
           missingCount: nextMissing,
           isNew: false,
@@ -3070,9 +3064,8 @@ async function main() {
         mapLon: old.mapLon ?? null,
         mapAddress: old.mapAddress || '',
         distanceFromWorkAddress: old.distanceFromWorkAddress || workAddress,
-        status: normalizeStatus(old.status),
+        status: shouldRemove ? 'archived' : normalizeStatus(old.status),
         active: !shouldRemove,
-        isRemoved: shouldRemove,
         removedAt: shouldRemove ? old.removedAt || now : null,
         missingCount: nextMissing,
         isNew: false
@@ -3098,7 +3091,7 @@ async function main() {
   normalizeListingImageFields(merged);
 
   const visibleActive = merged.filter((x) => x.active && x.display !== false);
-  const visibleRemoved = merged.filter((x) => !x.active && x.display !== false && x.isRemoved);
+  const visibleRemoved = merged.filter((x) => !x.active && x.display !== false && x.status === 'archived');
   const visibleAll = merged.filter((x) => x.display !== false);
 
   // Archive images only while flats are still visible/active.
