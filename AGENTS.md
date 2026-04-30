@@ -79,19 +79,8 @@ Each listing gets a 0-100 score based on profile criteria (budget, rooms, surfac
 
 ### Priority
 - **A** — within budget + enough rooms
-- **A-** — within hard budget + enough rooms
-- **A★ (perle)** — above hard budget but matches pearl criteria (configurable keywords, min rooms/surface)
-- **B** — studios or below minimum rooms (only shown if "plans B" enabled)
-
-### Pearl Detection
-
-Configurable per profile (`filters.pearl`):
-- `enabled` — toggle on/off
-- `minRooms` / `minSurfaceM2` — minimum thresholds
-- `keywords` — list of quality signals to look for in listing text
-- `minHits` — how many keywords must match
-
-Price must be between `maxTotalHardChf` and `maxPearlTotalChf`.
+- **A-** — early/direct-market listing signal
+- **B** — low-priority or non-matching listing
 
 ### Status Pipeline
 `À contacter → Visite → Dossier → Relance → Accepté / Refusé / Sans réponse`

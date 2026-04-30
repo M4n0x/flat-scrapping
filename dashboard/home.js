@@ -12,8 +12,6 @@ const zoneSearchEl = document.getElementById('zone-search');
 const zoneSuggestionsEl = document.getElementById('zone-suggestions');
 const workplaceEl = document.getElementById('f-workplace');
 const workplaceSuggestionsEl = document.getElementById('workplace-suggestions');
-const pearlEnabledEl = document.getElementById('f-pearl-enabled');
-const pearlOptionsEl = document.getElementById('pearl-options');
 const homeTabProfilesEl = document.getElementById('home-tab-profiles');
 const homeTabMapEl = document.getElementById('home-tab-map');
 const homePanelProfilesEl = document.getElementById('home-panel-profiles');
@@ -202,12 +200,6 @@ workplaceEl.addEventListener('keydown', (e) => {
   }
 });
 
-// --- Pearl toggle ---
-
-pearlEnabledEl.addEventListener('change', () => {
-  pearlOptionsEl.classList.toggle('hidden', !pearlEnabledEl.checked);
-});
-
 // --- Zone rendering ---
 
 function renderZones() {
@@ -244,8 +236,6 @@ function showForm(mode = 'create', profile = null) {
     zones = [...(profile.areas || [])];
     document.getElementById('f-min-rent').value = profile.filters?.minTotalChf ?? 0;
     document.getElementById('f-max-rent').value = profile.filters?.maxTotalChf ?? 1400;
-    document.getElementById('f-hard-max').value = profile.filters?.maxTotalHardChf ?? 1550;
-    document.getElementById('f-pearl-max').value = profile.filters?.maxPearlTotalChf ?? 1650;
     document.getElementById('f-min-rooms').value = profile.filters?.minRoomsPreferred ?? 2;
     document.getElementById('f-min-surface').value = profile.filters?.minSurfaceM2Preferred ?? 0;
     document.getElementById('f-max-age').value = profile.filters?.maxPublishedAgeDays ?? 30;
@@ -258,17 +248,6 @@ function showForm(mode = 'create', profile = null) {
     document.getElementById('s-rp-listings').checked = profile.sources?.retraitesListings !== false;
     document.getElementById('s-rp-projects').checked = profile.sources?.retraitesProjets !== false;
     document.getElementById('s-anibis').checked = !!profile.sources?.anibis;
-    document.getElementById('f-studio').checked = !!profile.filters?.allowStudioTransition;
-
-    // Pearl config
-    const pearl = profile.filters?.pearl || {};
-    const pearlEnabled = pearl.enabled !== false;
-    pearlEnabledEl.checked = pearlEnabled;
-    pearlOptionsEl.classList.toggle('hidden', !pearlEnabled);
-    document.getElementById('f-pearl-min-rooms').value = pearl.minRooms ?? 2;
-    document.getElementById('f-pearl-min-surface').value = pearl.minSurfaceM2 ?? 50;
-    document.getElementById('f-pearl-keywords').value = (pearl.keywords || ['rénové', 'balcon', 'terrasse', 'vue', 'quartier paisible', 'lac', 'centre']).join(', ');
-    document.getElementById('f-pearl-min-hits').value = pearl.minHits ?? 1;
   } else {
     formTitleEl.textContent = 'Nouveau profil';
     formSubmitEl.textContent = 'Créer le profil';
@@ -276,8 +255,6 @@ function showForm(mode = 'create', profile = null) {
     formEl.reset();
     zones = [];
     document.getElementById('f-allow-missing-surface').checked = true;
-    pearlEnabledEl.checked = true;
-    pearlOptionsEl.classList.remove('hidden');
   }
 
   renderZones();
@@ -340,20 +317,10 @@ formEl.addEventListener('submit', async (e) => {
     filters: {
       minTotalChf: Number(document.getElementById('f-min-rent').value) || 0,
       maxTotalChf: Number(document.getElementById('f-max-rent').value) || 1400,
-      maxTotalHardChf: Number(document.getElementById('f-hard-max').value) || 1550,
-      maxPearlTotalChf: Number(document.getElementById('f-pearl-max').value) || 1650,
       minRoomsPreferred: Number(document.getElementById('f-min-rooms').value) || 2,
       minSurfaceM2Preferred: Number(document.getElementById('f-min-surface').value) || 0,
       maxPublishedAgeDays: Number(document.getElementById('f-max-age').value) || 30,
-      allowMissingSurface: document.getElementById('f-allow-missing-surface').checked,
-      allowStudioTransition: document.getElementById('f-studio').checked,
-      pearl: {
-        enabled: pearlEnabledEl.checked,
-        minRooms: Number(document.getElementById('f-pearl-min-rooms').value) || 2,
-        minSurfaceM2: Number(document.getElementById('f-pearl-min-surface').value) || 50,
-        keywords: document.getElementById('f-pearl-keywords').value.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
-        minHits: Number(document.getElementById('f-pearl-min-hits').value) || 1
-      }
+      allowMissingSurface: document.getElementById('f-allow-missing-surface').checked
     },
     preferences: {
       workplaceAddress: document.getElementById('f-workplace').value.trim() || null

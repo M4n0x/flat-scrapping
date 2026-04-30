@@ -545,8 +545,6 @@ function scoreMiniHtml(item) {
 function matchesCardFilter(item, key) {
   if (key === 'all') return true;
   if (key === 'top') return !item.isRemoved && String(item.priority || '').startsWith('A');
-  if (key === 'pearl') return !item.isRemoved && !!item.isPearl;
-  if (key === 'transition') return !item.isRemoved && (String(item.priority || '') === 'B' || (item.rooms ?? 0) < 2);
   if (key === 'urgent') return !item.isRemoved && getUrgency(item).level === 'high';
   if (key === 'direct') {
     const stage = String(item.listingStage || '').toLowerCase();
@@ -565,12 +563,6 @@ function applyFilterAndSort(items) {
   let out = [...items].filter((item) => {
     if (mode === 'top') {
       return !item.isRemoved && String(item.priority || '').startsWith('A');
-    }
-    if (mode === 'transition') {
-      return !item.isRemoved && (String(item.priority || '') === 'B' || (item.rooms ?? 0) < 2);
-    }
-    if (mode === 'pearl') {
-      return !item.isRemoved && !!item.isPearl;
     }
     if (mode === 'direct') {
       const stage = String(item.listingStage || '').toLowerCase();
@@ -1140,8 +1132,6 @@ function renderCards(listings, latest) {
   cardsEl.innerHTML = '';
 
   const top = listings.filter((x) => String(x.priority || '').startsWith('A') && !x.isRemoved).length;
-  const pearls = listings.filter((x) => !!x.isPearl && !x.isRemoved).length;
-  const priorityB = listings.filter((x) => (String(x.priority || '') === 'B' || (x.rooms ?? 0) < 2) && !x.isRemoved).length;
   const urgent = listings.filter((x) => getUrgency(x).level === 'high' && !x.isRemoved).length;
   const removed = listings.filter((x) => !!x.isRemoved).length;
   const news = listings.filter((x) => isNewToday(x) && !x.isRemoved).length;
@@ -1154,7 +1144,6 @@ function renderCards(listings, latest) {
   cardsEl.append(
     card('Annonces visibles', listings.length, 'all'),
     card('Priorité haute', top, 'top'),
-    card('Perles ⭐', pearls, 'pearl'),
     card('Régie directe', direct, 'direct'),
     card('Urgentes', urgent, 'urgent'),
     card('Nouvelles', news, 'new'),
