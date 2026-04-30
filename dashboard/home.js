@@ -931,7 +931,7 @@ function renderScanProgress(job, profileNames) {
     const name = profileNames[slug] || slug;
     if (result) {
       const cls = result.ok ? 'done' : 'error';
-      detailsHtml += `<span class="profile-status ${cls}">${escapeHtml(name)} ${result.ok ? '✓' : '✗'}</span>`;
+      detailsHtml += `<span class="profile-status ${cls}">${escapeHtml(name)}</span>`;
     } else if (!isDone && !foundRunning) {
       foundRunning = true;
       detailsHtml += `<span class="profile-status running">${escapeHtml(name)} …</span>`;

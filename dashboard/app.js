@@ -644,7 +644,7 @@ function createSaveButton(handler) {
     saveBtn.textContent = '…';
     saveBtn.disabled = true;
     const ok = await handler();
-    saveBtn.textContent = ok ? 'Sauvé ✓' : 'Erreur';
+    saveBtn.textContent = ok ? 'Sauvé' : 'Erreur';
     setTimeout(() => {
       saveBtn.textContent = 'Sauver';
       saveBtn.disabled = false;
