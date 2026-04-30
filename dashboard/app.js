@@ -117,6 +117,15 @@ const STATUS_LABELS = {
   refuse: 'Refusé',
   aucune: '—'
 };
+const STATUS_KEY_BY_LABEL = {
+  'À contacter': 'contact',
+  'Visite': 'visite',
+  'Dossier': 'dossier',
+  'Relance': 'relance',
+  'Accepté': 'accepte',
+  'Refusé': 'refuse',
+  'Sans réponse': 'aucune'
+};
 function formatPrice(n) {
   if (n == null || isNaN(n)) return '—';
   return Math.round(n).toLocaleString('fr-CH').replace(/ |\s/g, "'");
@@ -774,7 +783,8 @@ function buildTableRow(item) {
 
   const priority = item.priority || 'B';
   const score = item.score ?? '—';
-  const status = item.status || '—';
+  const statusLabel = item.status || 'À contacter';
+  const statusKey = STATUS_KEY_BY_LABEL[statusLabel] || 'aucune';
   const isDirect = String(item.listingStage || '').toLowerCase() === 'early_market'
     || String(item.listingStage || '').toLowerCase() === 'off_market';
   const isNew = isNewToday(item) && !item.isRemoved;
@@ -793,7 +803,7 @@ function buildTableRow(item) {
     <td class="price">CHF ${escapeHtml(formatPrice(item.totalChf))}</td>
     <td>${item.driveMinutes ? `${escapeHtml(String(Math.round(item.driveMinutes)))} min` : '—'}</td>
     <td><span class="badge badge-score">${escapeHtml(String(score))}</span></td>
-    <td><span class="status-pill" data-status="${escapeHtml(status)}">${escapeHtml(status)}</span></td>
+    <td><span class="status-pill" data-status="${escapeHtml(statusKey)}">${escapeHtml(statusLabel)}</span></td>
     <td><button class="row-actions" data-action-menu type="button" aria-label="Actions">⋯</button></td>
   `;
 
