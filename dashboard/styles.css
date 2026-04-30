@@ -105,6 +105,20 @@
 .kanban-card .price { font-weight: var(--fw-semibold); font-feature-settings: "tnum"; }
 .kanban-card .meta  { color: var(--muted); font-size: var(--text-xs); }
 .kanban-card .actions { display: flex; gap: var(--sp-2); justify-content: flex-end; }
+.kanban-card-cover {
+  margin: calc(var(--sp-3) * -1) calc(var(--sp-3) * -1) 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow: hidden;
+  background: var(--surface-2);
+  aspect-ratio: 16 / 10;
+}
+.kanban-card-thumb {
+  width: 100%;
+  height: 100%;
+  background: var(--border-soft) center / cover no-repeat;
+  transition: transform 200ms;
+}
+.kanban-card:hover .kanban-card-thumb { transform: scale(1.03); }
 
 /* ---------- Scan output (inside dialog) ---------- */
 .scan-output {

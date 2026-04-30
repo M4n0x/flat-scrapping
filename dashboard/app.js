@@ -751,6 +751,12 @@ function buildTableRow(item) {
   if (thumbUrl) {
     const thumbEl = tr.querySelector('[data-thumb]');
     thumbEl.style.backgroundImage = `url(${JSON.stringify(thumbUrl)})`;
+    thumbEl.style.cursor = 'zoom-in';
+    thumbEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const urls = getImageUrls(item);
+      if (urls.length) lightbox.show(urls, 0);
+    });
   }
 
   return tr;
@@ -789,11 +795,34 @@ function buildKanbanCard(item) {
   const el = document.createElement('div');
   el.className = 'kanban-card';
   el.dataset.id = item.id;
+
+  const urls = getImageUrls(item);
+  const coverHtml = urls.length
+    ? `<div class="kanban-card-cover" data-cover><div class="kanban-card-thumb" data-thumb></div></div>`
+    : '';
+
   el.innerHTML = `
+    ${coverHtml}
     <div class="price">CHF ${escapeHtml(formatPrice(item.totalChf))}</div>
     <div class="meta">${escapeHtml(item.address || item.objectType || item.title || '—')} · ${escapeHtml(String(item.rooms ?? '?'))}p · ${escapeHtml(String(item.surfaceM2 ?? '?'))}m²</div>
     <div class="meta">Score ${escapeHtml(String(item.score ?? '—'))} · ${item.driveMinutes ? `${escapeHtml(String(Math.round(item.driveMinutes)))} min` : '—'}</div>
   `;
+
+  // Apply cover image via DOM property (avoid HTML injection)
+  if (urls.length) {
+    const thumb = el.querySelector('[data-thumb]');
+    if (thumb) thumb.style.backgroundImage = `url(${JSON.stringify(urls[0])})`;
+
+    const cover = el.querySelector('[data-cover]');
+    if (cover) {
+      cover.style.cursor = 'zoom-in';
+      cover.addEventListener('click', (e) => {
+        e.stopPropagation();
+        lightbox.show(urls, 0);
+      });
+    }
+  }
+
   return el;
 }
 
