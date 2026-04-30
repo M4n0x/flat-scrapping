@@ -544,7 +544,7 @@ select.select-trigger {
   background: var(--border-soft) center / cover no-repeat;
   flex-shrink: 0;
 }
-.table .row-actions {
+.row-actions {
   color: var(--muted-2);
   font-size: var(--text-lg);
   cursor: pointer;
@@ -552,5 +552,11 @@ select.select-trigger {
   border-radius: var(--radius-sm);
   background: transparent;
   border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: background 120ms, color 120ms;
 }
-.table .row-actions:hover { background: var(--border-soft); color: var(--text); }
+.row-actions:hover { background: var(--border-soft); color: var(--text); }
+.row-actions.danger:hover { background: var(--danger-soft); color: var(--danger-dark); }

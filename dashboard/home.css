@@ -34,6 +34,12 @@
   transform: translateY(-2px);
   box-shadow: var(--shadow-sm);
 }
+.profile-card,
+.profile-card:hover,
+.profile-card *,
+.profile-card *:hover {
+  text-decoration: none;
+}
 .profile-card-head {
   display: flex;
   justify-content: space-between;
@@ -490,8 +496,4 @@
 .profile-card-menu {
   display: inline-flex;
   gap: var(--sp-1);
-}
-.profile-card-menu .row-actions.danger:hover {
-  background: var(--danger-soft);
-  color: var(--danger-dark);
 }

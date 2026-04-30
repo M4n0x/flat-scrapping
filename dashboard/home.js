@@ -447,8 +447,8 @@ function buildProfileCard(profile) {
     <div class="profile-card-head">
       <h3>${escapeHtml(profile.label || profile.shortTitle || profile.slug)}</h3>
       <div class="profile-card-menu">
-        <button class="row-actions" type="button" data-edit aria-label="Modifier le profil" title="Modifier">⋯</button>
-        <button class="row-actions danger" type="button" data-delete aria-label="Supprimer le profil" title="Supprimer">🗑</button>
+        <button class="row-actions" type="button" data-edit aria-label="Modifier le profil" title="Modifier"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></button>
+        <button class="row-actions danger" type="button" data-delete aria-label="Supprimer le profil" title="Supprimer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg></button>
       </div>
     </div>
     <div class="profile-card-meta"><span>${escapeHtml(zonesText)}</span></div>
@@ -491,7 +491,7 @@ function renderProfiles(profiles) {
   if (!profiles.length) {
     gridEl.innerHTML = `
       <div class="empty" style="grid-column: 1 / -1;">
-        <div class="empty-icon">&#127968;</div>
+        <div class="empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></div>
         <h3>Aucun profil pour le moment</h3>
         <p>Créez un profil pour commencer à suivre les annonces dans vos zones.</p>
         <button class="btn btn-primary" type="button" id="empty-create-btn">Créer un profil</button>
