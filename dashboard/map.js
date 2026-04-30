@@ -54,12 +54,15 @@ function detailIcon(listing) {
   const color = safeColor(listing.profileColor);
   const wrapper = document.createElement('span');
   wrapper.className = 'pin';
-  wrapper.style.setProperty('--pin-color', color);
+  wrapper.style.color = color;
+  const icon = document.createElement('i');
+  icon.className = 'fa-solid fa-location-dot';
+  wrapper.appendChild(icon);
   return L.divIcon({
     className: 'map-marker-detail',
     html: wrapper.outerHTML,
-    iconSize: [24, 30],
-    iconAnchor: [12, 30],
+    iconSize: [32, 32],
+    iconAnchor: [16, 30],
     popupAnchor: [0, -28]
   });
 }
@@ -72,8 +75,8 @@ function dotIcon(listing) {
   return L.divIcon({
     className: 'map-marker-dot',
     html: dot.outerHTML,
-    iconSize: [8, 8],
-    iconAnchor: [4, 4]
+    iconSize: [10, 10],
+    iconAnchor: [5, 5]
   });
 }
 

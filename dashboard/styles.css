@@ -274,50 +274,52 @@ select#filter-recent { width: 100%; }
 
 .map-marker-detail {
   position: relative;
+  background: transparent !important;
+  border: 0 !important;
 }
 
 .map-marker-detail .pin {
-  display: block;
-  width: 24px;
-  height: 30px;
-  background: var(--pin-color, var(--accent));
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  position: relative;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-  border: 2px solid #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 30px;
+  line-height: 1;
   cursor: pointer;
+  filter:
+    drop-shadow(0 0 1.5px #fff)
+    drop-shadow(0 0 1.5px #fff)
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+  transition: transform 0.12s ease;
 }
 
-.map-marker-detail .pin::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 8px;
-  height: 8px;
-  background: #fff;
-  border-radius: 50%;
+.map-marker-detail .pin:hover {
+  transform: translateY(-2px) scale(1.08);
 }
 
-.map-marker-detail.marker-drop {
-  animation: marker-drop 0.5s cubic-bezier(0.25, 1.5, 0.5, 1) both;
+.map-marker-detail.marker-drop .pin {
+  animation: marker-drop 0.55s cubic-bezier(0.25, 1.5, 0.5, 1) both;
 }
 
 @keyframes marker-drop {
-  0%   { transform: translateY(-20px) scale(0.6); opacity: 0; }
-  60%  { transform: translateY(2px) scale(1.05); opacity: 1; }
+  0%   { transform: translateY(-24px) scale(0.5); opacity: 0; }
+  60%  { transform: translateY(2px) scale(1.12); opacity: 1; }
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
+.map-marker-dot {
+  background: transparent !important;
+  border: 0 !important;
+}
+
 .map-marker-dot .dot {
-  width: 8px;
-  height: 8px;
+  display: block;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--pin-color, var(--accent));
   border: 2px solid #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   cursor: pointer;
 }
 
