@@ -3102,10 +3102,8 @@ async function main() {
     all: visibleAll
   };
 
-  // eslint-disable-next-line no-unused-vars
-  const { statuses: _statuses, ...trackerBase } = tracker;
   const newTracker = {
-    ...trackerBase,
+    ...tracker,
     schemaVersion: 2,
     updatedAt: now,
     criteria: config,

@@ -2,9 +2,23 @@ import { migrateStatus, DEFAULT_STATUS } from './status.mjs';
 
 export const TRACKER_SCHEMA_VERSION = 2;
 
+function hasLegacyFields(input) {
+  if (!input || typeof input !== 'object') return false;
+  if (Object.prototype.hasOwnProperty.call(input, 'statuses')) return true;
+  if (Array.isArray(input.listings)) {
+    for (const listing of input.listings) {
+      if (listing && Object.prototype.hasOwnProperty.call(listing, 'isRemoved')) return true;
+    }
+  }
+  return false;
+}
+
 export function migrateTracker(input) {
   const source = input && typeof input === 'object' ? input : {};
-  if (source.schemaVersion === TRACKER_SCHEMA_VERSION) {
+  const isV2 = source.schemaVersion === TRACKER_SCHEMA_VERSION;
+  const dirty = hasLegacyFields(source);
+
+  if (isV2 && !dirty) {
     return { tracker: source, changed: false };
   }
 
@@ -16,9 +30,10 @@ export function migrateTracker(input) {
 
     if (wasRemoved) {
       next.status = 'archived';
-    } else {
+    } else if (!isV2) {
       next.status = migrateStatus(next.status) || DEFAULT_STATUS;
     }
+    // On v2 inputs without isRemoved, leave status as-is — it's already a v2 key.
 
     return next;
   });

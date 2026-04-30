@@ -91,3 +91,53 @@ test('migrateTracker preserves unrelated fields on listings', () => {
     totalChf: 1450
   });
 });
+
+test('migrateTracker strips a stray statuses array even on a v2 input', () => {
+  const before = {
+    schemaVersion: 2,
+    statuses: ['legacy', 'array', 'should not survive'],
+    listings: [{ id: 'a', status: 'sorting' }]
+  };
+
+  const { tracker, changed } = migrateTracker(before);
+
+  assert.equal(changed, true);
+  assert.equal(Object.prototype.hasOwnProperty.call(tracker, 'statuses'), false);
+  assert.equal(tracker.schemaVersion, 2);
+  assert.equal(tracker.listings[0].status, 'sorting');
+});
+
+test('migrateTracker strips stray isRemoved on listings even on a v2 input', () => {
+  const before = {
+    schemaVersion: 2,
+    listings: [
+      { id: 'a', status: 'sorting', isRemoved: false },
+      { id: 'b', status: 'pursuing', isRemoved: true }
+    ]
+  };
+
+  const { tracker, changed } = migrateTracker(before);
+
+  assert.equal(changed, true);
+  for (const listing of tracker.listings) {
+    assert.equal(Object.prototype.hasOwnProperty.call(listing, 'isRemoved'), false);
+  }
+  // isRemoved=true on a v2 listing is ambiguous: status was already 'pursuing' but
+  // someone wrote isRemoved=true alongside it. Per the original migration semantics,
+  // isRemoved=true wins and forces 'archived' — preserve that semantic on v2 too.
+  assert.equal(tracker.listings.find((l) => l.id === 'b').status, 'archived');
+  // The clean v2 entry stays put.
+  assert.equal(tracker.listings.find((l) => l.id === 'a').status, 'sorting');
+});
+
+test('migrateTracker on a clean v2 input still returns changed: false (no work needed)', () => {
+  const before = {
+    schemaVersion: 2,
+    listings: [{ id: 'a', status: 'sorting' }]
+  };
+
+  const { tracker, changed } = migrateTracker(before);
+
+  assert.equal(changed, false);
+  assert.equal(tracker, before);
+});
