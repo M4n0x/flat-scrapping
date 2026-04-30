@@ -18,6 +18,7 @@ const SCRAPE_SCRIPT = path.join(ROOT, 'scripts', 'scrape-immobilier.mjs');
 
 const PORT = Number(process.env.PORT || 8787);
 const scanAllJobs = new Map();
+const activeScans = new Map(); // slug -> ChildProcess
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -541,6 +542,88 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       return sendJson(res, 500, { ok: false, error: err.message });
     }
+  }
+
+  if (req.method === 'GET' && u.pathname === '/api/run-scan-stream') {
+    const profile = getProfileFromRequest(u);
+
+    if (activeScans.has(profile)) {
+      return sendJson(res, 409, { ok: false, error: 'Un scan est déjà en cours pour ce profil' });
+    }
+
+    await ensureProfileStorage(profile);
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    });
+    res.write(': stream open\n\n');
+
+    const { spawn } = await import('node:child_process');
+    const child = spawn(process.execPath, [SCRAPE_SCRIPT, `--profile=${profile}`, '--events-fd=3'], {
+      cwd: ROOT,
+      stdio: ['ignore', 'pipe', 'pipe', 'pipe']
+    });
+    activeScans.set(profile, child);
+
+    // Drain stdout/stderr so the child doesn't block, but ignore the human-readable
+    // logs (they go to the cron path; here we only care about NDJSON on fd 3).
+    child.stdout.on('data', () => {});
+    child.stderr.on('data', () => {});
+
+    let buffer = '';
+    let scanDoneSent = false;
+
+    const sendFrame = (payload) => {
+      try {
+        res.write('data: ' + JSON.stringify(payload) + '\n\n');
+      } catch {
+        // client may have disconnected; the close handler will clean up
+      }
+    };
+
+    child.stdio[3].on('data', (chunk) => {
+      buffer += chunk.toString('utf8');
+      let newlineIndex;
+      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        if (!line) continue;
+        let event;
+        try {
+          event = JSON.parse(line);
+        } catch {
+          continue; // skip malformed lines
+        }
+        sendFrame(event);
+        if (event.type === 'scan-done' || event.type === 'scan-error') scanDoneSent = true;
+      }
+    });
+
+    const cleanup = () => {
+      if (activeScans.get(profile) === child) activeScans.delete(profile);
+    };
+
+    child.on('exit', (code, signal) => {
+      if (!scanDoneSent) {
+        sendFrame({
+          type: code === 0 ? 'scan-done' : 'scan-error',
+          message: code === 0 ? 'ok' : `Scan exited (code=${code} signal=${signal || ''})`,
+          at: new Date().toISOString()
+        });
+      }
+      cleanup();
+      try { res.end(); } catch {}
+    });
+
+    req.on('close', () => {
+      if (!child.killed) child.kill('SIGTERM');
+      cleanup();
+    });
+
+    return;
   }
 
   if (req.method === 'POST' && u.pathname === '/api/run-scan-all') {
