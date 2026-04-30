@@ -1,0 +1,84 @@
+/* Design tokens — shadcn / Geist (light), emerald accent.
+   Imported once before component and page CSS. */
+
+:root {
+  /* === Color: neutral (zinc) === */
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #fafafa;
+  --border: #e4e4e7;
+  --border-soft: #f4f4f5;
+  --text: #09090b;
+  --muted: #71717a;
+  --muted-2: #a1a1aa;
+
+  /* === Color: accent (emerald) === */
+  --accent: #059669;
+  --accent-dark: #065f46;
+  --accent-soft: #d1fae5;
+  --accent-fg: #ffffff;
+  --ring: rgba(5, 150, 105, 0.18);
+
+  /* === Color: semantic === */
+  --success: #16a34a;
+  --success-soft: #dcfce7;
+  --success-dark: #166534;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --warning-dark: #92400e;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --danger-dark: #991b1b;
+  --info: #2563eb;
+  --info-soft: #dbeafe;
+  --info-dark: #1e40af;
+
+  /* === Typography === */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --lh-tight: 1.2;
+  --lh-normal: 1.5;
+  --lh-loose: 1.7;
+
+  /* === Spacing (4 px base) === */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* === Radii === */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* === Shadows === */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow: 0 2px 4px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.10), 0 4px 8px rgba(0, 0, 0, 0.06);
+
+  /* === Layout === */
+  --topbar-h: 52px;
+  --content-max: 1320px;
+  --gutter: 24px;
+}
