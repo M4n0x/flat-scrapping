@@ -3,106 +3,112 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Apartment Ops — Dashboard</title>
+    <title>Apartment Ops</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
     <link rel="stylesheet" href="/dashboard/tokens.css" />
     <link rel="stylesheet" href="/dashboard/components.css" />
     <link rel="stylesheet" href="/dashboard/styles.css" />
   </head>
-  <body>
-    <!-- Sticky top bar -->
-    <header class="topbar">
+  <body class="app-body">
+    <header class="app-topbar">
       <a href="/" class="brand"><span class="brand-dot"></span>Apartment Ops</a>
-      <select id="profile-switcher" class="select-trigger" aria-label="Changer de profil"></select>
       <span class="grow"></span>
-      <span id="last-scan" class="last-scan hidden">Dernier scan…</span>
-      <button id="refresh" class="btn btn-ghost btn-sm" type="button">Rafraîchir</button>
-      <button id="scan" class="btn btn-primary btn-sm" type="button">Scanner</button>
+      <span id="scan-status" class="scan-status hidden"></span>
+      <button id="scan-button" class="btn btn-primary btn-sm" type="button">Scanner</button>
     </header>
 
-    <!-- Page header -->
-    <section class="page-header">
-      <div>
-        <h1 id="page-title">Chargement du profil…</h1>
-        <p id="page-meta" class="meta"></p>
-      </div>
-    </section>
+    <div class="app-shell">
+      <aside id="sidebar" class="app-sidebar" aria-label="Filtres">
+        <section class="sidebar-section" data-section="profiles">
+          <header class="sidebar-section-head">Profils</header>
+          <div class="sidebar-section-body" id="filter-profiles"></div>
+        </section>
 
-    <!-- KPIs -->
-    <section class="kpi-row" id="kpis"></section>
-
-    <!-- Toolbar: tabs + search + filter + sort -->
-    <section class="toolbar">
-      <div class="tabs" role="tablist" aria-label="Changer de vue">
-        <button id="tab-table"  class="tab active" type="button" role="tab" data-view="table"  aria-selected="true">Table</button>
-        <button id="tab-kanban" class="tab"        type="button" role="tab" data-view="kanban" aria-selected="false">Kanban</button>
-      </div>
-      <label class="search">
-        <span class="search-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span>
-        <input id="search-box" type="search" placeholder="Recherche par adresse, type, zone…" />
-      </label>
-      <span class="grow"></span>
-      <select id="priority-filter" class="select-trigger" aria-label="Filtre">
-        <option value="all">Toutes</option>
-        <option value="top">Priorité A</option>
-        <option value="direct">Régie directe</option>
-      </select>
-      <select id="sort-by" class="select-trigger" aria-label="Trier">
-        <option value="score">Trier · Score</option>
-        <option value="price">Trier · Loyer</option>
-        <option value="area">Trier · Zone</option>
-        <option value="date">Trier · Date</option>
-      </select>
-    </section>
-
-    <!-- Main content -->
-    <main class="page-content">
-      <div id="panel-table" class="view-panel active">
-        <div class="table-wrap">
-          <table class="table listings-table">
-            <thead>
-              <tr>
-                <th style="width:8px"></th>
-                <th style="width:70px"></th>
-                <th>Bien</th>
-                <th style="width:110px">Loyer</th>
-                <th style="width:110px">Trajet</th>
-                <th style="width:80px">Score</th>
-                <th style="width:140px">Statut</th>
-                <th style="width:32px"></th>
-              </tr>
-            </thead>
-            <tbody id="rows"></tbody>
-          </table>
-        </div>
-        <section class="mobile-board" id="mobile-rows"></section>
-      </div>
-
-      <div id="panel-kanban" class="view-panel">
-        <div id="kanban-board" class="kanban-board"></div>
-      </div>
-    </main>
-
-    <!-- Scan output dialog (was an inline <pre>) -->
-    <div id="scan-dialog" class="dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="scan-dialog-title">
-      <div class="dialog-panel">
-        <div class="dialog-head">
-          <div>
-            <h2 id="scan-dialog-title">Scan en cours</h2>
-            <p class="dialog-sub">Sortie du scraper</p>
+        <section class="sidebar-section" data-section="recent">
+          <header class="sidebar-section-head">Trouvées récemment</header>
+          <div class="sidebar-section-body">
+            <select id="filter-recent" class="select-trigger">
+              <option value="any">N'importe quand</option>
+              <option value="1d">Dernières 24h</option>
+              <option value="3d">3 derniers jours</option>
+              <option value="7d">7 derniers jours</option>
+              <option value="14d">14 derniers jours</option>
+            </select>
           </div>
-          <button class="dialog-close" type="button" data-close-dialog aria-label="Fermer">✕</button>
+        </section>
+
+        <section class="sidebar-section" data-section="unread">
+          <header class="sidebar-section-head">Non lues</header>
+          <div class="sidebar-section-body">
+            <label class="toggle">
+              <input type="checkbox" id="filter-unread" />
+              <span>Afficher uniquement les non lues</span>
+            </label>
+          </div>
+        </section>
+
+        <section class="sidebar-section" data-section="status">
+          <header class="sidebar-section-head">Statut</header>
+          <div class="sidebar-section-body" id="filter-status"></div>
+        </section>
+
+        <section class="sidebar-section" data-section="priority">
+          <header class="sidebar-section-head">Priorité</header>
+          <div class="sidebar-section-body" id="filter-priority"></div>
+        </section>
+
+        <section class="sidebar-section" data-section="sources">
+          <header class="sidebar-section-head">Sources</header>
+          <div class="sidebar-section-body" id="filter-sources"></div>
+        </section>
+
+        <footer class="sidebar-foot">
+          <button id="settings-button" class="btn btn-ghost btn-sm" type="button">Paramètres</button>
+        </footer>
+      </aside>
+
+      <main id="map-container" class="app-map" aria-label="Carte des annonces">
+        <div id="map" class="map-canvas"></div>
+        <div id="scan-progress" class="scan-progress hidden" role="status" aria-live="polite">
+          <div class="scan-progress-source"></div>
+          <div class="scan-progress-counter"></div>
+          <div class="scan-progress-bar"></div>
         </div>
-        <pre id="scan-output" class="scan-output"></pre>
+      </main>
+
+      <aside id="listings-panel" class="app-listings" aria-label="Annonces">
+        <header class="listings-head">
+          <span id="listings-count">0 annonces</span>
+        </header>
+        <div id="listings-rows" class="listings-rows"></div>
+      </aside>
+    </div>
+
+    <div id="settings-drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-labelledby="settings-drawer-title">
+      <div class="drawer-overlay" data-drawer-close></div>
+      <div class="drawer-panel">
+        <header class="drawer-head">
+          <h2 id="settings-drawer-title">Profils</h2>
+          <button class="drawer-close" type="button" data-drawer-close aria-label="Fermer">×</button>
+        </header>
+        <div id="drawer-body" class="drawer-body"></div>
       </div>
     </div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script type="module" src="/dashboard/app.js"></script>
   </body>
 </html>
