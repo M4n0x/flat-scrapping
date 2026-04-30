@@ -1193,7 +1193,6 @@ const refresh = load;
 
 function openDialog(dialog) {
   if (!dialog) return;
-  dialog.dataset.prevFocus = '';
   const prev = document.activeElement;
   if (prev && prev !== document.body) {
     dialog.__prevFocus = prev;
@@ -1241,6 +1240,7 @@ if (savedSort && sortEl.querySelector(`option[value="${savedSort}"]`)) {
 }
 
 scanBtn.addEventListener('click', async () => {
+  scanBtn.disabled = true;
   scanOut.textContent = '';
   openDialog(scanDialog);
   lastScanEl.classList.remove('hidden');
@@ -1249,6 +1249,9 @@ scanBtn.addEventListener('click', async () => {
 
   try {
     const res = await fetch(apiUrl('/api/run-scan'), { method: 'POST' });
+    if (!res.ok || !res.body) {
+      throw new Error(`Scan failed: HTTP ${res.status}`);
+    }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     while (true) {
@@ -1264,6 +1267,8 @@ scanBtn.addEventListener('click', async () => {
     scanOut.textContent += `\n[error] ${err.message}`;
     lastScanEl.classList.remove('running');
     lastScanEl.textContent = 'Scan échoué';
+  } finally {
+    scanBtn.disabled = false;
   }
 });
 
