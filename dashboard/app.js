@@ -1,1391 +1,194 @@
-const kpisEl = document.getElementById('kpis');
-const rowsEl = document.getElementById('rows');
-const mobileRowsEl = document.getElementById('mobile-rows');
-const kanbanEl = document.getElementById('kanban-board');
-const refreshBtn = document.getElementById('refresh');
-const scanBtn = document.getElementById('scan');
-const scanOut = document.getElementById('scan-output');
-const scanDialog = document.getElementById('scan-dialog');
-const lastScanEl = document.getElementById('last-scan');
-const filterEl = document.getElementById('priority-filter');
-const sortEl = document.getElementById('sort-by');
-const searchEl = document.getElementById('search-box');
-const tabTableEl = document.getElementById('tab-table');
-const tabKanbanEl = document.getElementById('tab-kanban');
-const panelTableEl = document.getElementById('panel-table');
-const panelKanbanEl = document.getElementById('panel-kanban');
-const pageTitleEl = document.getElementById('page-title');
-const pageMetaEl = document.getElementById('page-meta');
-const profileSwitcherEl = document.getElementById('profile-switcher');
+import { initMap, setListings, addListing, focusListing, setProfileVisibility, onMarkerClick } from '/dashboard/map.js';
+import { applyFilters, defaultFilterState } from '/dashboard/filter-logic.js';
+import { renderSidebar } from '/dashboard/sidebar.js';
+import { renderListings, highlightRow, markRowAsRead, queueViewed } from '/dashboard/listings-panel.js';
+import { startScan, isScanActive } from '/dashboard/scan.js';
+import { initDrawer, openDrawer } from '/dashboard/settings-drawer.js';
 
-const PROFILE = (() => {
-  const parts = window.location.pathname.split('/').filter(Boolean);
-  if (parts.length >= 2 && parts[1] === 'dashboard') return parts[0];
-  return new URLSearchParams(window.location.search).get('profile') || 'fribourg';
-})();
+const STATE_KEY = 'apartment-ops:filter-state:v1';
+const SOURCES = ['immobilier.ch', 'flatfox.ch', 'naef.ch', 'bernard-nicod.ch', 'retraitespopulaires.ch', 'anibis.ch'];
 
-const PROFILE_TITLES = {
-  vevey: 'Vevey et environs',
-  fribourg: 'Fribourg et environs',
-  'saint-maurice': 'Saint-Maurice (VS)'
+const state = {
+  filter: hydrateFilterState(),
+  payload: { profiles: [], listings: [] }
 };
 
-let profileAreasText = '';
+async function bootstrap() {
+  initMap(document.getElementById('map'));
+  initDrawer({ onProfilesChanged: refreshAll });
 
-async function loadProfileSwitcher() {
+  await refreshAll();
+  applyUrlOverridesAfterPayload();
+
+  if (state.payload.profiles.length === 0) {
+    openDrawer();
+  }
+
+  document.getElementById('scan-button').addEventListener('click', () => {
+    if (isScanActive()) return;
+    const visible = state.payload.profiles.filter((p) => !state.filter.hiddenProfiles.has(p.slug));
+    if (visible.length === 0) {
+      alert('Aucun profil visible.');
+      return;
+    }
+    runScansSequentially(visible.map((p) => p.slug));
+  });
+
+  onMarkerClick((id) => {
+    highlightRow(id);
+    markRowAsRead(id);
+    queueViewed(id);
+  });
+}
+
+async function refreshAll() {
+  let payload = { profiles: [], listings: [] };
   try {
-    const res = await fetch('/api/profiles');
-    const { profiles } = await res.json();
-    if (!profileSwitcherEl || !Array.isArray(profiles)) return;
-
-    profileSwitcherEl.innerHTML = '';
-    for (const p of profiles) {
-      const opt = document.createElement('option');
-      opt.value = p.slug;
-      opt.textContent = p.label || p.name;
-      if (p.slug === PROFILE) opt.selected = true;
-      profileSwitcherEl.appendChild(opt);
-    }
-
-    // Update title/zones from profile data
-    const current = profiles.find((p) => p.slug === PROFILE);
-    if (current) {
-      if (pageTitleEl) pageTitleEl.textContent = PROFILE_TITLES[PROFILE] || current.name;
-      profileAreasText = current.areas ? `Zones: ${current.areas}` : '';
-      if (pageMetaEl) pageMetaEl.textContent = profileAreasText;
-    }
-
-    // Add "manage" option at the end
-    const manageOpt = document.createElement('option');
-    manageOpt.value = '__manage__';
-    manageOpt.textContent = 'Gérer les profils…';
-    profileSwitcherEl.appendChild(manageOpt);
-
-    profileSwitcherEl.addEventListener('change', () => {
-      const selected = profileSwitcherEl.value;
-      if (selected === '__manage__') {
-        window.location.href = '/';
-        return;
-      }
-      window.location.href = `/${encodeURIComponent(selected)}/dashboard`;
-    });
-  } catch {
-    // Fallback: just show current profile
-    if (profileSwitcherEl) {
-      const opt = document.createElement('option');
-      opt.value = PROFILE;
-      opt.textContent = PROFILE_TITLES[PROFILE] || PROFILE;
-      opt.selected = true;
-      profileSwitcherEl.appendChild(opt);
-    }
-  }
-}
-
-loadProfileSwitcher();
-
-if (pageTitleEl) {
-  pageTitleEl.textContent = PROFILE_TITLES[PROFILE] || `Suivi ${PROFILE}`;
-}
-if (pageMetaEl) {
-  pageMetaEl.textContent = profileAreasText;
-}
-
-function apiUrl(pathname) {
-  const sep = pathname.includes('?') ? '&' : '?';
-  return `${pathname}${sep}profile=${encodeURIComponent(PROFILE)}`;
-}
-
-const DONE_STATUSES = new Set(['Accepté', 'Refusé']);
-const REMOVED_KANBAN_STATUS = 'Retirées';
-
-let statuses = [];
-let allListings = [];
-let latestState = { newCount: 0 };
-let draggedKanbanId = null;
-let scorePopoverEl = null;
-let scorePopoverHideTimer = null;
-let activeScoreTrigger = null;
-let scorePopoverGlobalBound = false;
-let activeCardFilter = 'all';
-
-const STATUS_KEY_BY_LABEL = {
-  'À contacter': 'contact',
-  'Visite': 'visite',
-  'Dossier': 'dossier',
-  'Relance': 'relance',
-  'Accepté': 'accepte',
-  'Refusé': 'refuse',
-  'Sans réponse': 'aucune'
-};
-function formatPrice(n) {
-  if (n == null || isNaN(n)) return '—';
-  return Math.round(n).toLocaleString('fr-CH').replace(/ |\s/g, "'");
-}
-
-function money(v) {
-  if (v == null) return 'n/a';
-  return `CHF ${new Intl.NumberFormat('fr-CH').format(v)}`;
-}
-
-function shortWhen(iso) {
-  if (!iso) return 'n/a';
-  return new Date(iso).toLocaleString('fr-CH', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
-
-function publishedMeta(item) {
-  const publishedIso = item?.publishedAt;
-  const firstSeenIso = item?.firstSeenAt;
-
-  const parseDays = (iso) => {
-    if (!iso) return null;
-    const ts = new Date(iso).getTime();
-    if (!Number.isFinite(ts)) return null;
-    return Math.max(0, Math.floor((Date.now() - ts) / 86400000));
-  };
-
-  const publishedDays = parseDays(publishedIso);
-  if (publishedDays != null) {
-    return { days: publishedDays, approximate: false, iso: publishedIso };
-  }
-
-  const discoveredDays = parseDays(firstSeenIso);
-  if (discoveredDays != null) {
-    return { days: discoveredDays, approximate: true, iso: firstSeenIso };
-  }
-
-  return { days: null, approximate: false, iso: null };
-}
-
-function publishedLabel(item) {
-  const meta = publishedMeta(item);
-  if (meta.days == null) return 'N/A';
-  return meta.approximate ? `${meta.days} j*` : `${meta.days} j`;
-}
-
-function publishedTitle(item) {
-  const meta = publishedMeta(item);
-  if (meta.days == null) return 'Date de parution indisponible';
-  if (meta.approximate) return `Découverte le ${shortWhen(meta.iso)} (estimation)`;
-  return `Publié le ${shortWhen(meta.iso)}`;
-}
-
-function distanceLabel(item) {
-  if (item.distanceKm != null && Number.isFinite(Number(item.distanceKm))) {
-    return `${Number(item.distanceKm).toFixed(1)} km`;
-  }
-  if (item.distanceText) return String(item.distanceText);
-  return 'n/a';
-}
-
-function distanceBadge(item) {
-  const span = document.createElement('span');
-  span.className = 'distance-chip';
-  span.textContent = distanceLabel(item);
-  span.title = item.distanceFromWorkAddress
-    ? `Distance estimée à vol d'oiseau depuis ${item.distanceFromWorkAddress}`
-    : "Distance estimée à vol d'oiseau depuis le lieu de travail";
-  return span;
-}
-
-function travelMinutesLabel(item, mode) {
-  const minutes = mode === 'drive' ? item.driveMinutes : item.transitMinutes;
-  const text = mode === 'drive' ? item.driveText : item.transitText;
-
-  if (minutes != null && Number.isFinite(Number(minutes))) {
-    return `${Math.round(Number(minutes))} min`;
-  }
-
-  if (text) return String(text);
-  return 'n/a';
-}
-
-function createTravelCell(item) {
-  const wrap = document.createElement('div');
-  wrap.className = 'travel-cell';
-
-  wrap.appendChild(distanceBadge(item));
-
-  const lines = document.createElement('div');
-  lines.className = 'travel-lines';
-  lines.innerHTML = `
-    <span>Voiture: ${travelMinutesLabel(item, 'drive')}</span>
-    <span>Transports: ${travelMinutesLabel(item, 'transit')}</span>
-  `;
-
-  wrap.appendChild(lines);
-  return wrap;
-}
-
-function travelInlineLabel(item) {
-  return `Travail: ${distanceLabel(item)} · Voiture ${travelMinutesLabel(item, 'drive')} · Transports ${travelMinutesLabel(item, 'transit')}`;
-}
-
-function renderKpis(stats) {
-  // stats = [{ label: 'Total', value: 42, accent: false, delta: '+3 cette semaine' }, ...]
-  kpisEl.innerHTML = '';
-  for (const s of stats) {
-    const div = document.createElement('div');
-    div.className = 'kpi';
-    const lbl = document.createElement('div');
-    lbl.className = 'kpi-lbl';
-    lbl.textContent = s.label;
-    const val = document.createElement('div');
-    val.className = s.accent ? 'kpi-val accent' : 'kpi-val';
-    val.textContent = String(s.value);
-    div.append(lbl, val);
-    if (s.delta) {
-      const delta = document.createElement('div');
-      delta.className = 'kpi-delta';
-      delta.textContent = s.delta;
-      div.append(delta);
-    }
-    kpisEl.append(div);
-  }
-}
-
-async function updateStatus(id, status, notes) {
-  const res = await fetch(apiUrl('/api/update-status'), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id, status, notes })
-  });
-  const data = await res.json();
-  return !!data.ok;
-}
-
-async function togglePin(id) {
-  const res = await fetch(apiUrl('/api/toggle-pin'), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  const data = await res.json();
-  if (data.ok) {
-    const item = allListings.find((x) => String(x.id) === String(id));
-    if (item) item.pinned = data.pinned;
-  }
-  return data.ok ? data.pinned : null;
-}
-
-async function deleteListing(id) {
-  const res = await fetch(apiUrl('/api/delete-listing'), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  const data = await res.json();
-  return !!data.ok;
-}
-
-function createPinButton(item) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = `pin-btn${item.pinned ? ' pinned' : ''}`;
-
-  const label = item.pinned ? 'Désépingler' : 'Épingler en haut';
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
-  btn.innerHTML = '<i class="fa-solid fa-thumbtack pin-icon" aria-hidden="true"></i>';
-
-  btn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    btn.disabled = true;
-    const pinned = await togglePin(item.id);
-    if (pinned !== null) {
-      item.pinned = pinned;
-      renderAll(latestState);
-    } else {
-      btn.disabled = false;
-    }
-  });
-  return btn;
-}
-
-function getImageUrls(item) {
-  if (Array.isArray(item.imageUrlsLocal) && item.imageUrlsLocal.length) return item.imageUrlsLocal;
-  if (Array.isArray(item.imageUrls) && item.imageUrls.length) return item.imageUrls;
-  if (Array.isArray(item.imageUrlsRemote) && item.imageUrlsRemote.length) return item.imageUrlsRemote;
-  if (item.imageUrl) return [item.imageUrl];
-  return [];
-}
-
-function getUrgency(item) {
-  if (item.isRemoved) return { level: 'done', label: 'Retirée' };
-
-  const status = item.status || 'À contacter';
-  if (DONE_STATUSES.has(status)) return { level: 'done', label: 'Clos' };
-  if (status === 'Sans réponse' || status === 'Relance') return { level: 'high', label: 'Relance' };
-
-  const refIso = item.updatedAt || item.firstSeenAt || item.lastSeenAt;
-  const ageHours = refIso ? (Date.now() - new Date(refIso).getTime()) / 3600000 : 0;
-
-  if (status === 'À contacter') {
-    if (ageHours > 18) return { level: 'high', label: 'Urgent' };
-    if (ageHours > 8) return { level: 'medium', label: 'Suivi' };
-    return { level: 'low', label: 'OK' };
-  }
-
-  if (status === 'Visite') {
-    if (ageHours > 36) return { level: 'high', label: 'Relance' };
-    if (ageHours > 18) return { level: 'medium', label: 'Suivi' };
-    return { level: 'low', label: 'OK' };
-  }
-
-  if (status === 'Dossier') {
-    if (ageHours > 24) return { level: 'high', label: 'Urgent' };
-    if (ageHours > 12) return { level: 'medium', label: 'Suivi' };
-    return { level: 'low', label: 'OK' };
-  }
-
-  return { level: 'low', label: 'OK' };
-}
-
-function listingSourceLabel(item) {
-  const raw = String(item?.source || '').trim().toLowerCase();
-  if (raw.includes('immobilier')) return 'immobilier.ch';
-  if (raw.includes('flatfox')) return 'flatfox.ch';
-
-  const url = String(item?.url || '').trim();
-  if (url) {
-    try {
-      const host = new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
-      if (host) return host;
-    } catch {
-      // noop
-    }
-  }
-
-  return raw || null;
-}
-
-function sourceMetaHtml(item) {
-  const source = listingSourceLabel(item);
-  if (!source) return '';
-  return `<span class="meta-source">source: ${escapeHtml(source)}</span>`;
-}
-
-function isNewToday(item) {
-  if (!item.firstSeenAt) return false;
-  const seen = new Date(item.firstSeenAt);
-  const today = new Date();
-  return seen.getFullYear() === today.getFullYear()
-    && seen.getMonth() === today.getMonth()
-    && seen.getDate() === today.getDate();
-}
-
-function stateBadgesHtml(item) {
-  const badges = [];
-  if (isNewToday(item) && !item.isRemoved) badges.push('<span class="state-badge new">Nouveau</span>');
-
-  const stage = String(item?.listingStage || '').toLowerCase();
-  if (stage === 'off_market') badges.push('<span class="state-badge offmarket">Off-market</span>');
-  else if (stage === 'early_market') badges.push('<span class="state-badge early">Direct régie</span>');
-
-  if (item.isRemoved) badges.push('<span class="state-badge removed">Retirée</span>');
-
-  return badges.length ? `<div class="state-badges">${badges.join('')}</div>` : '';
-}
-
-function escapeHtml(value = '') {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function scoreLines(item) {
-  if (Array.isArray(item.scoreBreakdown) && item.scoreBreakdown.length) return item.scoreBreakdown;
-  if (!item.scoreTooltip) return [];
-
-  return String(item.scoreTooltip)
-    .split(/[|·]/)
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .filter((x) => !/^score\s*:/i.test(x));
-}
-
-function encodeScorePayload(item) {
-  const payload = {
-    score: item.score ?? 'n/a',
-    lines: scoreLines(item)
-  };
-  return encodeURIComponent(JSON.stringify(payload));
-}
-
-function decodeScorePayload(el) {
-  try {
-    return JSON.parse(decodeURIComponent(el?.dataset?.scorePayload || ''));
-  } catch {
-    return { score: 'n/a', lines: [] };
-  }
-}
-
-function scorePercent(item) {
-  const raw = Number(item.score ?? 0);
-  return Math.max(0, Math.min(100, raw));
-}
-
-function ensureScorePopover() {
-  if (!scorePopoverEl) {
-    scorePopoverEl = document.createElement('div');
-    scorePopoverEl.className = 'score-popover-floating';
-    scorePopoverEl.setAttribute('role', 'tooltip');
-    document.body.appendChild(scorePopoverEl);
-  }
-
-  if (!scorePopoverGlobalBound) {
-    document.addEventListener('click', (event) => {
-      if (!activeScoreTrigger || !scorePopoverEl?.classList.contains('visible')) return;
-      if (activeScoreTrigger.contains(event.target)) return;
-      hideScorePopover();
-    });
-
-    window.addEventListener('scroll', hideScorePopover, { passive: true });
-    window.addEventListener('resize', hideScorePopover);
-    scorePopoverGlobalBound = true;
-  }
-
-  return scorePopoverEl;
-}
-
-function placeScorePopover(trigger, pop) {
-  const rect = trigger.getBoundingClientRect();
-  const margin = 10;
-
-  const width = pop.offsetWidth || 260;
-  const height = pop.offsetHeight || 120;
-
-  let left = rect.left + rect.width / 2 - width / 2;
-  left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
-
-  let top = rect.top - height - 8;
-  if (top < margin) top = rect.bottom + 8;
-
-  pop.style.left = `${Math.round(left)}px`;
-  pop.style.top = `${Math.round(top)}px`;
-}
-
-function showScorePopover(trigger) {
-  const pop = ensureScorePopover();
-  clearTimeout(scorePopoverHideTimer);
-
-  const payload = decodeScorePayload(trigger);
-  const lines = Array.isArray(payload.lines) ? payload.lines : [];
-  const listHtml = lines.length
-    ? `<ul class="score-pop-list">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
-    : '<div class="score-pop-empty">Pas de détail disponible</div>';
-
-  pop.innerHTML = `<div class="score-pop-title">Score ${escapeHtml(payload.score)}</div>${listHtml}`;
-  pop.classList.add('visible');
-  activeScoreTrigger = trigger;
-  placeScorePopover(trigger, pop);
-}
-
-function hideScorePopover() {
-  if (!scorePopoverEl) return;
-  scorePopoverEl.classList.remove('visible');
-  activeScoreTrigger = null;
-}
-
-function scheduleHideScorePopover() {
-  clearTimeout(scorePopoverHideTimer);
-  scorePopoverHideTimer = setTimeout(() => {
-    hideScorePopover();
-  }, 80);
-}
-
-function bindScorePopovers() {
-  ensureScorePopover();
-
-  document.querySelectorAll('.score-trigger').forEach((el) => {
-    if (el.dataset.scorePopoverBound === '1') return;
-    el.dataset.scorePopoverBound = '1';
-
-    el.addEventListener('mouseenter', () => showScorePopover(el));
-    el.addEventListener('mouseleave', scheduleHideScorePopover);
-    el.addEventListener('focus', () => showScorePopover(el));
-    el.addEventListener('blur', hideScorePopover);
-
-    el.addEventListener('click', (event) => {
-      event.preventDefault();
-      if (activeScoreTrigger === el && scorePopoverEl?.classList.contains('visible')) {
-        hideScorePopover();
-      } else {
-        showScorePopover(el);
-      }
-    });
-
-    el.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        showScorePopover(el);
-      }
-      if (event.key === 'Escape') {
-        hideScorePopover();
-      }
-    });
-  });
-}
-
-function createScoreDisplay(item) {
-  const wrap = document.createElement('div');
-  wrap.className = 'score-wrap score-trigger';
-  wrap.dataset.scorePayload = encodeScorePayload(item);
-  wrap.tabIndex = 0;
-  wrap.setAttribute('role', 'button');
-  wrap.setAttribute('aria-label', `Détails du score ${item.score ?? 'n/a'}`);
-
-  const pill = document.createElement('span');
-  pill.className = 'score-pill';
-  pill.textContent = item.score ?? '-';
-
-  const track = document.createElement('span');
-  track.className = 'score-track';
-  const fill = document.createElement('span');
-  fill.className = 'score-fill';
-  fill.style.width = `${scorePercent(item)}%`;
-  track.appendChild(fill);
-
-  wrap.append(pill, track);
-  return wrap;
-}
-
-function scoreMiniHtml(item) {
-  return `<span class="score-mini score-trigger" data-score-payload="${encodeScorePayload(item).replace(/"/g, '&quot;')}" tabindex="0" role="button" aria-label="Détails du score ${item.score ?? 'n/a'}"><span class="score-pill">${item.score ?? '-'}</span><span class="score-track"><span class="score-fill" style="width:${scorePercent(item)}%"></span></span></span>`;
-}
-
-function matchesCardFilter(item, key) {
-  if (key === 'all') return true;
-  if (key === 'top') return !item.isRemoved && String(item.priority || '').startsWith('A');
-  if (key === 'urgent') return !item.isRemoved && getUrgency(item).level === 'high';
-  if (key === 'direct') {
-    const stage = String(item.listingStage || '').toLowerCase();
-    return !item.isRemoved && (stage === 'early_market' || stage === 'off_market');
-  }
-  if (key === 'new') return !item.isRemoved && isNewToday(item);
-  if (key === 'removed') return !!item.isRemoved;
-  return true;
-}
-
-function applyFilterAndSort(items) {
-  const mode = filterEl.value;
-  const sortBy = sortEl.value;
-  const q = (searchEl.value || '').trim().toLowerCase();
-
-  let out = [...items].filter((item) => {
-    if (mode === 'top') {
-      return !item.isRemoved && String(item.priority || '').startsWith('A');
-    }
-    if (mode === 'direct') {
-      const stage = String(item.listingStage || '').toLowerCase();
-      return !item.isRemoved && (stage === 'early_market' || stage === 'off_market');
-    }
-    return true;
-  });
-
-  if (q) {
-    out = out.filter((item) => {
-      const hay = `${item.objectType || ''} ${item.address || ''} ${item.area || ''} ${item.title || ''}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }
-
-  if (activeCardFilter !== 'all') {
-    out = out.filter((item) => matchesCardFilter(item, activeCardFilter));
-  }
-
-  out.sort((a, b) => {
-    // Pinned items always first
-    const aPin = a.pinned ? 1 : 0;
-    const bPin = b.pinned ? 1 : 0;
-    if (aPin !== bPin) return bPin - aPin;
-
-    const aGrey = (a.isRemoved || isRefused(a)) ? 1 : 0;
-    const bGrey = (b.isRemoved || isRefused(b)) ? 1 : 0;
-    if (aGrey !== bGrey) return aGrey - bGrey;
-
-    if (sortBy === 'price') return (a.totalChf || 999999) - (b.totalChf || 999999);
-    if (sortBy === 'area') return String(a.area || '').localeCompare(String(b.area || ''), 'fr-CH');
-    if (sortBy === 'date') {
-      const aDays = publishedMeta(a).days ?? Infinity;
-      const bDays = publishedMeta(b).days ?? Infinity;
-      return aDays - bDays;
-    }
-    return (b.score || 0) - (a.score || 0);
-  });
-
-  return out;
-}
-
-function createStatusSelect(item) {
-  const select = document.createElement('select');
-  select.className = 'select-trigger';
-  for (const st of statuses) {
-    const opt = document.createElement('option');
-    opt.value = st;
-    opt.textContent = st;
-    if (st === item.status) opt.selected = true;
-    select.appendChild(opt);
-  }
-  return select;
-}
-
-function createSaveButton(handler) {
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'save-inline';
-  saveBtn.textContent = 'Sauver';
-  saveBtn.addEventListener('click', async () => {
-    saveBtn.textContent = '…';
-    saveBtn.disabled = true;
-    const ok = await handler();
-    saveBtn.textContent = ok ? 'Sauvé' : 'Erreur';
-    setTimeout(() => {
-      saveBtn.textContent = 'Sauver';
-      saveBtn.disabled = false;
-    }, 900);
-  });
-  return saveBtn;
-}
-
-function clearKanbanDropTargets() {
-  document.querySelectorAll('.kanban-items.drop-target').forEach((el) => el.classList.remove('drop-target'));
-}
-
-function attachKanbanDropzone(body, targetStatus) {
-  body.dataset.status = targetStatus;
-
-  body.addEventListener('dragover', (event) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    body.classList.add('drop-target');
-  });
-
-  body.addEventListener('dragenter', (event) => {
-    event.preventDefault();
-    body.classList.add('drop-target');
-  });
-
-  body.addEventListener('dragleave', (event) => {
-    if (!body.contains(event.relatedTarget)) {
-      body.classList.remove('drop-target');
-    }
-  });
-
-  body.addEventListener('drop', async (event) => {
-    event.preventDefault();
-    body.classList.remove('drop-target');
-
-    const droppedId = event.dataTransfer.getData('text/plain') || draggedKanbanId;
-    if (!droppedId) return;
-
-    const item = allListings.find((x) => String(x.id) === String(droppedId));
-    if (!item) return;
-    if (item.isRemoved) return;
-    if ((item.status || 'À contacter') === targetStatus) return;
-
-    const ok = await updateStatus(item.id, targetStatus, item.notes || '');
-    if (ok) await load();
-  });
-}
-
-function setActiveView(view) {
-  const tabs = [tabTableEl, tabKanbanEl];
-  const panels = [panelTableEl, panelKanbanEl];
-  tabs.forEach((t) => {
-    if (!t) return;
-    const isActive = t.dataset.view === view;
-    t.classList.toggle('active', isActive);
-    t.setAttribute('aria-selected', String(isActive));
-  });
-  panels.forEach((p) => {
-    if (!p) return;
-    p.classList.toggle('active', p.id === `panel-${view}`);
-  });
-  localStorage.setItem('apartment-dashboard:view', view);
-}
-tabTableEl?.addEventListener('click', () => setActiveView('table'));
-tabKanbanEl?.addEventListener('click', () => setActiveView('kanban'));
-
-function isRefused(item) {
-  return !item.isRemoved && (item.status || '') === 'Refusé';
-}
-
-function buildTableRow(item) {
-  const tr = document.createElement('tr');
-  tr.dataset.id = item.id;
-
-  const priority = item.priority || 'B';
-  const score = item.score ?? '—';
-  const statusLabel = item.status || 'À contacter';
-  const statusKey = STATUS_KEY_BY_LABEL[statusLabel] || 'aucune';
-  const isDirect = String(item.listingStage || '').toLowerCase() === 'early_market'
-    || String(item.listingStage || '').toLowerCase() === 'off_market';
-  const isNew = isNewToday(item) && !item.isRemoved;
-
-  const directBadge  = isDirect ? '<span class="badge badge-direct">Régie directe</span>' : '';
-  const newBadge     = isNew ? '<span class="badge badge-new">Nouveau</span>' : '';
-  const removedBadge = item.isRemoved ? '<span class="badge badge-removed">Retirée</span>' : '';
-
-  tr.innerHTML = `
-    <td><div class="pri-bar" data-priority="${escapeHtml(priority)}"></div></td>
-    <td><div class="thumb" data-thumb></div></td>
-    <td>
-      <div class="addr-main">${escapeHtml(item.address || item.objectType || item.title || '—')}</div>
-      <div class="addr-sub">${escapeHtml(item.area || '')} · ${escapeHtml(String(item.rooms ?? '?'))} pièces · ${escapeHtml(String(item.surfaceM2 ?? '?'))} m² ${directBadge}${newBadge}${removedBadge}</div>
-    </td>
-    <td class="price">CHF ${escapeHtml(formatPrice(item.totalChf))}</td>
-    <td>${item.driveMinutes ? `${escapeHtml(String(Math.round(item.driveMinutes)))} min` : '—'}</td>
-    <td><span class="badge badge-score">${escapeHtml(String(score))}</span></td>
-    <td><span class="status-pill" data-status="${escapeHtml(statusKey)}">${escapeHtml(statusLabel)}</span></td>
-    <td><button class="row-actions" data-action-menu type="button" aria-label="Actions">⋯</button></td>
-  `;
-
-  // Apply thumb URL via DOM property to avoid HTML injection through the URL
-  const thumbUrl = getImageUrls(item)[0];
-  if (thumbUrl) {
-    const thumbEl = tr.querySelector('[data-thumb]');
-    thumbEl.style.backgroundImage = `url(${JSON.stringify(thumbUrl)})`;
-    thumbEl.style.cursor = 'zoom-in';
-    thumbEl.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const urls = getImageUrls(item);
-      if (urls.length) lightbox.show(urls, 0);
-    });
-  }
-
-  const menuBtn = tr.querySelector('[data-action-menu]');
-  if (menuBtn) {
-    menuBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openRowActionMenu(menuBtn, item);
-    });
-  }
-
-  return tr;
-}
-
-function createUrgencyBadge(item) {
-  const urgency = getUrgency(item);
-  const badge = document.createElement('span');
-  badge.className = `urgency-badge ${urgency.level}`;
-  badge.textContent = urgency.label;
-  badge.title = `Dernière activité: ${shortWhen(item.updatedAt || item.firstSeenAt || item.lastSeenAt)}`;
-  return badge;
-}
-
-function renderDesktop(listings) {
-  rowsEl.innerHTML = '';
-
-  if (!listings.length) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="8"><div class="empty">Aucune annonce ne correspond aux filtres.</div></td>`;
-    rowsEl.appendChild(tr);
-    return;
-  }
-
-  for (const item of listings) {
-    const tr = buildTableRow(item);
-    if (item.isRemoved) tr.classList.add('row-removed');
-    if (isRefused(item)) tr.classList.add('row-refused');
-    if (isNewToday(item) && !item.isRemoved) tr.classList.add('row-new');
-    if (item.pinned) tr.classList.add('row-pinned');
-    rowsEl.appendChild(tr);
-  }
-}
-
-function buildKanbanCard(item) {
-  const el = document.createElement('div');
-  el.className = 'kanban-card';
-  el.dataset.id = item.id;
-
-  const urls = getImageUrls(item);
-  const coverHtml = urls.length
-    ? `<div class="kanban-card-cover" data-cover><div class="kanban-card-thumb" data-thumb></div></div>`
-    : '';
-
-  el.innerHTML = `
-    ${coverHtml}
-    <div class="price">CHF ${escapeHtml(formatPrice(item.totalChf))}</div>
-    <div class="meta">${escapeHtml(item.address || item.objectType || item.title || '—')} · ${escapeHtml(String(item.rooms ?? '?'))}p · ${escapeHtml(String(item.surfaceM2 ?? '?'))}m²</div>
-    <div class="meta">Score ${escapeHtml(String(item.score ?? '—'))} · ${item.driveMinutes ? `${escapeHtml(String(Math.round(item.driveMinutes)))} min` : '—'}</div>
-  `;
-
-  // Apply cover image via DOM property (avoid HTML injection)
-  if (urls.length) {
-    const thumb = el.querySelector('[data-thumb]');
-    if (thumb) thumb.style.backgroundImage = `url(${JSON.stringify(urls[0])})`;
-
-    const cover = el.querySelector('[data-cover]');
-    if (cover) {
-      cover.style.cursor = 'zoom-in';
-      cover.addEventListener('click', (e) => {
-        e.stopPropagation();
-        lightbox.show(urls, 0);
-      });
-    }
-  }
-
-  return el;
-}
-
-function buildKanbanColumn(label, count) {
-  const col = document.createElement('section');
-  col.className = 'kanban-col';
-  col.innerHTML = `
-    <header class="kanban-col-head">
-      <div class="kanban-col-title">${escapeHtml(label)}</div>
-      <span class="kanban-col-count">${escapeHtml(String(count))}</span>
-    </header>
-  `;
-  return col;
-}
-
-function renderKanban(listings) {
-  draggedKanbanId = null;
-  kanbanEl.innerHTML = '';
-
-  if (!listings.length) {
-    kanbanEl.innerHTML = '<div class="empty">Aucune annonce pour ce filtre.</div>';
-    return;
-  }
-
-  const baseStatuses = (statuses.length
-    ? statuses
-    : ['À contacter', 'Visite', 'Dossier', 'Relance', 'Accepté', 'Refusé', 'Sans réponse'])
-    .slice();
-  const orderedStatuses = [...baseStatuses, REMOVED_KANBAN_STATUS];
-
-  for (const status of orderedStatuses) {
-    const colItems = status === REMOVED_KANBAN_STATUS
-      ? listings.filter((x) => x.isRemoved)
-      : listings.filter((x) => !x.isRemoved && (x.status || 'À contacter') === status);
-
-    const col = buildKanbanColumn(status, colItems.length);
-
-    const body = document.createElement('div');
-    body.className = 'kanban-items';
-    if (status !== REMOVED_KANBAN_STATUS) {
-      attachKanbanDropzone(body, status);
-    }
-
-    if (!colItems.length) {
-      const empty = document.createElement('div');
-      empty.className = 'kanban-empty';
-      empty.textContent = '—';
-      body.appendChild(empty);
-    }
-
-    for (const item of colItems) {
-      const kCard = buildKanbanCard(item);
-      if (item.isRemoved) kCard.classList.add('removed');
-      if (isRefused(item)) kCard.classList.add('refused');
-      if (isNewToday(item) && !item.isRemoved) kCard.classList.add('new');
-      if (item.pinned) kCard.classList.add('pinned');
-
-      if (!item.isRemoved) {
-        kCard.draggable = true;
-
-        kCard.addEventListener('dragstart', (event) => {
-          draggedKanbanId = String(item.id);
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('text/plain', String(item.id));
-          kCard.classList.add('dragging');
-        });
-
-        kCard.addEventListener('dragend', () => {
-          draggedKanbanId = null;
-          kCard.classList.remove('dragging');
-          clearKanbanDropTargets();
-        });
-      }
-
-      const actions = document.createElement('div');
-      actions.className = 'actions';
-      actions.addEventListener('dragstart', (event) => event.preventDefault());
-
-      if (!item.isRemoved) {
-        const pinBtn = createPinButton(item);
-        pinBtn.draggable = false;
-
-        const select = createStatusSelect(item);
-        select.draggable = false;
-
-        select.addEventListener('change', async () => {
-          select.disabled = true;
-          await updateStatus(item.id, select.value, item.notes || '');
-          await load();
-        });
-
-        actions.append(pinBtn, select);
-      } else {
-        const retired = document.createElement('div');
-        retired.className = 'k-retired-note';
-        retired.textContent = `Retirée le ${shortWhen(item.removedAt || item.lastSeenAt)}`;
-
-        const del = document.createElement('button');
-        del.className = 'save-inline danger';
-        del.textContent = 'Supprimer';
-        del.addEventListener('click', async () => {
-          const okConfirm = window.confirm('Supprimer cette annonce retirée du suivi ?');
-          if (!okConfirm) return;
-          del.disabled = true;
-          del.textContent = '…';
-          const ok = await deleteListing(item.id);
-          if (ok) await load();
-          else {
-            del.disabled = false;
-            del.textContent = 'Supprimer';
-          }
-        });
-
-        actions.append(retired, del);
-      }
-
-      kCard.appendChild(actions);
-
-      body.appendChild(kCard);
-    }
-
-    col.appendChild(body);
-    kanbanEl.appendChild(col);
-  }
-}
-
-function renderMobile(listings) {
-  mobileRowsEl.innerHTML = '';
-
-  if (!listings.length) {
-    mobileRowsEl.innerHTML = '<div class="empty">Aucune annonce ne correspond aux filtres.</div>';
-    return;
-  }
-
-  for (const item of listings) {
-    const card = document.createElement('article');
-    card.className = 'mobile-card';
-    if (item.isRemoved) card.classList.add('removed');
-    if (isRefused(item)) card.classList.add('refused');
-    if (isNewToday(item) && !item.isRemoved) card.classList.add('new');
-
-    const urls = getImageUrls(item);
-    const cover = urls[0] || '';
-
-    card.innerHTML = `
-      ${cover ? `<img class="mobile-cover" data-cover alt="Aperçu ${escapeHtml(item.objectType || item.title || '')}" loading="lazy" />` : '<div class="mobile-cover"></div>'}
-      <div class="mobile-content">
-        <h3 class="mobile-title"><span class="tag">${escapeHtml(item.priority || '-')}</span> ${scoreMiniHtml(item)} <a data-href target="_blank" rel="noreferrer">${escapeHtml(item.objectType || item.title || '')}</a></h3>
-        <div class="mobile-meta">
-          <div>${escapeHtml(item.address || '')}</div>
-          <div>${escapeHtml(item.area || '-')} · ${money(item.totalChf)}${sourceMetaHtml(item) ? ` · ${sourceMetaHtml(item)}` : ''}</div>
-          <div>${travelInlineLabel(item)}</div>
-          <div>Publié: ${publishedLabel(item)}</div>
-          <div>${escapeHtml(item.priceRaw || '')}</div>
-          ${stateBadgesHtml(item)}
-          <div class="mobile-urgency"></div>
-        </div>
-      </div>
-    `;
-
-    // Set cover image src via DOM property to avoid HTML injection
-    if (cover) {
-      const coverImg = card.querySelector('[data-cover]');
-      if (coverImg) coverImg.src = cover;
-    }
-
-    // Set link href via DOM property to avoid HTML injection
-    if (item.url) {
-      const linkEl = card.querySelector('[data-href]');
-      if (linkEl) linkEl.href = item.url;
-    }
-
-    const mobileCover = card.querySelector('.mobile-cover');
-    if (mobileCover && urls.length) {
-      mobileCover.style.cursor = 'pointer';
-      mobileCover.addEventListener('click', () => lightbox.show(urls, 0));
-    }
-
-    const urgency = createUrgencyBadge(item);
-    card.querySelector('.mobile-urgency').appendChild(urgency);
-
-    if (urls.length > 1) {
-      const strip = document.createElement('div');
-      strip.className = 'mobile-thumb-strip';
-      urls.slice(1, 5).forEach((src, i) => {
-        const im = document.createElement('img');
-        im.src = src;
-        im.loading = 'lazy';
-        im.alt = 'miniature';
-        im.style.cursor = 'pointer';
-        im.addEventListener('click', () => lightbox.show(urls, i + 1));
-        strip.appendChild(im);
-      });
-      card.querySelector('.mobile-content').appendChild(strip);
-    }
-
-    const controls = document.createElement('div');
-    controls.className = 'mobile-controls';
-
-    if (!item.isRemoved) {
-      const pinBtn = createPinButton(item);
-      const select = createStatusSelect(item);
-      const notesInput = document.createElement('input');
-      notesInput.value = item.notes || '';
-      notesInput.placeholder = 'notes';
-
-      select.addEventListener('change', async () => {
-        select.disabled = true;
-        await updateStatus(item.id, select.value, notesInput.value);
-        await load();
-      });
-
-      const pinRow = document.createElement('div');
-      pinRow.className = 'mobile-pin-row';
-      pinRow.append(pinBtn, select);
-
-      const saveBtn = createSaveButton(() => updateStatus(item.id, select.value, notesInput.value));
-      controls.append(pinRow, notesInput, saveBtn);
-    } else {
-      const retired = document.createElement('div');
-      retired.className = 'k-retired-note';
-      retired.textContent = `Annonce retirée le ${shortWhen(item.removedAt || item.lastSeenAt)}`;
-
-      const del = document.createElement('button');
-      del.className = 'save-inline danger';
-      del.textContent = 'Supprimer';
-      del.addEventListener('click', async () => {
-        const okConfirm = window.confirm('Supprimer cette annonce retirée du suivi ?');
-        if (!okConfirm) return;
-        del.disabled = true;
-        del.textContent = '…';
-        const ok = await deleteListing(item.id);
-        if (ok) await load();
-        else {
-          del.disabled = false;
-          del.textContent = 'Supprimer';
-        }
-      });
-
-      controls.append(retired, del);
-    }
-
-    if (item.pinned) card.classList.add('row-pinned');
-    card.querySelector('.mobile-content').appendChild(controls);
-    mobileRowsEl.appendChild(card);
-  }
-}
-
-function renderCards(listings, latest) {
-  const top = listings.filter((x) => String(x.priority || '').startsWith('A') && !x.isRemoved).length;
-  const urgent = listings.filter((x) => getUrgency(x).level === 'high' && !x.isRemoved).length;
-  const removed = listings.filter((x) => !!x.isRemoved).length;
-  const news = listings.filter((x) => isNewToday(x) && !x.isRemoved).length;
-
-  const direct = listings.filter((x) => {
-    const stage = String(x.listingStage || '').toLowerCase();
-    return !x.isRemoved && (stage === 'early_market' || stage === 'off_market');
-  }).length;
-
-  renderKpis([
-    { label: 'Annonces visibles', value: listings.length },
-    { label: 'Priorité A', value: top, accent: true },
-    { label: 'Régie directe', value: direct },
-    { label: 'Urgentes', value: urgent },
-    { label: 'Nouvelles', value: news },
-    { label: 'Retirées', value: removed }
-  ]);
-}
-
-function renderAll(latest) {
-  hideScorePopover();
-  const filtered = applyFilterAndSort(allListings);
-  renderCards(allListings, latest);
-  renderKanban(filtered);
-  renderDesktop(filtered);
-  renderMobile(filtered);
-  bindScorePopovers();
-}
-
-async function load() {
-  const res = await fetch(apiUrl('/api/state'));
-  const { tracker, latest, profile, areas } = await res.json();
-
-  statuses = tracker.statuses || [];
-  allListings = (tracker.listings || []).filter((x) => x.display !== false);
-  latestState = latest || { newCount: 0 };
-
-  const activeCount = allListings.filter((x) => !x.isRemoved).length;
-  const removedCount = allListings.filter((x) => x.isRemoved).length;
-
-  const effectiveProfile = String(profile || PROFILE || 'vevey');
-  if (pageTitleEl) {
-    pageTitleEl.textContent = PROFILE_TITLES[effectiveProfile] || `Suivi ${effectiveProfile}`;
-  }
-  if (typeof areas === 'string' && areas.trim()) {
-    profileAreasText = `Zones: ${areas}`;
-  }
-  if (pageMetaEl) {
-    pageMetaEl.textContent = profileAreasText;
-  }
-
-  if (lastScanEl && !lastScanEl.classList.contains('running')) {
-    lastScanEl.textContent = `Dernier scan: ${shortWhen(latest.generatedAt)} · ${activeCount} actives · ${removedCount} retirées`;
-  }
-  renderAll(latestState);
-}
-
-const refresh = load;
-
-function openDialog(dialog) {
-  if (!dialog) return;
-  const prev = document.activeElement;
-  if (prev && prev !== document.body) {
-    dialog.__prevFocus = prev;
-  }
-  dialog.classList.add('open');
-  const first = dialog.querySelector(
-    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-  );
-  first?.focus();
-}
-function closeDialog(dialog) {
-  if (!dialog) return;
-  dialog.classList.remove('open');
-  const prev = dialog.__prevFocus;
-  if (prev && typeof prev.focus === 'function') prev.focus();
-  dialog.__prevFocus = null;
-}
-function setupDialogClose(dialog) {
-  if (!dialog) return;
-  dialog.addEventListener('click', (e) => {
-    if (e.target === dialog || e.target.closest?.('[data-close-dialog]')) {
-      closeDialog(dialog);
-    }
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && dialog.classList.contains('open')) {
-      closeDialog(dialog);
-    }
-  });
-}
-setupDialogClose(scanDialog);
-
-refreshBtn.addEventListener('click', load);
-filterEl.addEventListener('change', () => renderAll(latestState));
-sortEl.addEventListener('change', () => {
-  localStorage.setItem('apartment-search-sort', sortEl.value);
-  renderAll(latestState);
-});
-searchEl.addEventListener('input', () => renderAll(latestState));
-
-// Restaurer le tri depuis localStorage au chargement
-const savedSort = localStorage.getItem('apartment-search-sort');
-if (savedSort && sortEl.querySelector(`option[value="${savedSort}"]`)) {
-  sortEl.value = savedSort;
-}
-
-scanBtn.addEventListener('click', async () => {
-  scanBtn.disabled = true;
-  scanOut.textContent = '';
-  openDialog(scanDialog);
-  lastScanEl.classList.remove('hidden');
-  lastScanEl.classList.add('running');
-  lastScanEl.textContent = 'Scan en cours…';
-
-  try {
-    const res = await fetch(apiUrl('/api/run-scan'), { method: 'POST' });
-    if (!res.ok || !res.body) {
-      throw new Error(`Scan failed: HTTP ${res.status}`);
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      scanOut.textContent += decoder.decode(value, { stream: true });
-      scanOut.scrollTop = scanOut.scrollHeight;
-    }
-    lastScanEl.classList.remove('running');
-    lastScanEl.textContent = 'Dernier scan à l\'instant';
-    await refresh();
+    const res = await fetch('/api/map-listings');
+    payload = await res.json();
   } catch (err) {
-    scanOut.textContent += `\n[error] ${err.message}`;
-    lastScanEl.classList.remove('running');
-    lastScanEl.textContent = 'Scan échoué';
-  } finally {
-    scanBtn.disabled = false;
+    console.error('failed to load /api/map-listings', err);
   }
-});
+  state.payload = payload;
 
-// Restore saved view or default to table
-const savedView = localStorage.getItem('apartment-dashboard:view');
-setActiveView(savedView === 'kanban' ? 'kanban' : 'table');
-
-// ── Lightbox ──
-
-const lightbox = (() => {
-  let urls = [];
-  let idx = 0;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'lightbox-overlay';
-  overlay.innerHTML = `
-    <button class="lightbox-close" aria-label="Fermer">&times;</button>
-    <button class="lightbox-nav lightbox-prev" aria-label="Précédent">&#8249;</button>
-    <img class="lightbox-img" src="" alt="Photo annonce" />
-    <button class="lightbox-nav lightbox-next" aria-label="Suivant">&#8250;</button>
-    <div class="lightbox-strip"></div>
-    <div class="lightbox-counter"></div>
-  `;
-  document.body.appendChild(overlay);
-
-  const imgEl = overlay.querySelector('.lightbox-img');
-  const counterEl = overlay.querySelector('.lightbox-counter');
-  const stripEl = overlay.querySelector('.lightbox-strip');
-  const prevBtn = overlay.querySelector('.lightbox-prev');
-  const nextBtn = overlay.querySelector('.lightbox-next');
-  const closeBtn = overlay.querySelector('.lightbox-close');
-
-  function show(imageUrls, startIdx = 0) {
-    urls = imageUrls || [];
-    idx = startIdx;
-    update();
-    overlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
+  for (const profile of payload.profiles) {
+    setProfileVisibility(profile.slug, !state.filter.hiddenProfiles.has(profile.slug));
   }
 
-  function hide() {
-    overlay.classList.remove('open');
-    document.body.style.overflow = '';
-  }
-
-  function update() {
-    if (!urls.length) return;
-    idx = ((idx % urls.length) + urls.length) % urls.length;
-    imgEl.src = urls[idx];
-    counterEl.textContent = `${idx + 1} / ${urls.length}`;
-    prevBtn.style.display = urls.length > 1 ? '' : 'none';
-    nextBtn.style.display = urls.length > 1 ? '' : 'none';
-
-    stripEl.innerHTML = '';
-    if (urls.length > 1) {
-      urls.forEach((src, i) => {
-        const thumb = document.createElement('img');
-        thumb.src = src;
-        thumb.alt = `Photo ${i + 1}`;
-        if (i === idx) thumb.classList.add('active');
-        thumb.addEventListener('click', (e) => { e.stopPropagation(); idx = i; update(); });
-        stripEl.appendChild(thumb);
-      });
-    }
-  }
-
-  closeBtn.addEventListener('click', hide);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) hide(); });
-  prevBtn.addEventListener('click', (e) => { e.stopPropagation(); idx--; update(); });
-  nextBtn.addEventListener('click', (e) => { e.stopPropagation(); idx++; update(); });
-  imgEl.addEventListener('click', (e) => e.stopPropagation());
-
-  document.addEventListener('keydown', (e) => {
-    if (!overlay.classList.contains('open')) return;
-    if (e.key === 'Escape') hide();
-    else if (e.key === 'ArrowLeft') { idx--; update(); }
-    else if (e.key === 'ArrowRight') { idx++; update(); }
+  renderSidebar({ profiles: payload.profiles, sources: SOURCES }, state.filter, (next) => {
+    state.filter = next;
+    persistFilterState(next);
+    rerender();
   });
 
-  return { show, hide };
-})();
+  rerender();
+}
 
-// ---------- Row action menu (popover) ----------
-const rowActionMenu = (() => {
-  const menu = document.createElement('div');
-  menu.className = 'row-action-menu hidden';
-  menu.setAttribute('role', 'menu');
-  document.body.appendChild(menu);
+function rerender() {
+  const visible = applyFilters(state.payload.listings, state.filter, Date.now());
+  setListings(visible);
+  renderListings(visible, {
+    onClick: (id) => focusListing(id, { openPopup: true }),
+    onHover: () => {},
+    onMarkViewed: async (ids) => {
+      const groups = groupIdsByProfile(ids);
+      await Promise.all([...groups.entries()].map(([profileSlug, groupIds]) =>
+        fetch('/api/mark-viewed?profile=' + encodeURIComponent(profileSlug), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ids: groupIds })
+        }).catch((err) => console.error('mark-viewed failed', err))
+      ));
+    }
+  });
 
-  let currentAnchor = null;
-
-  function close() {
-    menu.classList.add('hidden');
-    currentAnchor = null;
+  for (const profile of state.payload.profiles) {
+    setProfileVisibility(profile.slug, !state.filter.hiddenProfiles.has(profile.slug));
   }
+}
 
-  function open(anchorEl, item) {
-    currentAnchor = anchorEl;
-    const pinLabel = item.pinned ? 'Désépingler' : 'Épingler en haut';
-    const orderedStatuses = (statuses && statuses.length
-      ? statuses
-      : ['À contacter', 'Visite', 'Dossier', 'Relance', 'Accepté', 'Refusé', 'Sans réponse']);
-    const currentStatus = item.status || 'À contacter';
+function groupIdsByProfile(ids) {
+  const idSet = new Set(ids);
+  const groups = new Map();
+  for (const listing of state.payload.listings) {
+    if (!idSet.has(listing.id)) continue;
+    if (!groups.has(listing.profileSlug)) groups.set(listing.profileSlug, []);
+    groups.get(listing.profileSlug).push(listing.id);
+  }
+  return groups;
+}
 
-    menu.innerHTML = `
-      <button class="row-action-item" data-act="pin" type="button">${escapeHtml(pinLabel)}</button>
-      <div class="row-action-sep"></div>
-      <div class="row-action-section-label">Changer le statut</div>
-      ${orderedStatuses.map((s) => `
-        <button class="row-action-item ${s === currentStatus ? 'is-current' : ''}" data-act="status" data-value="${escapeHtml(s)}" type="button" ${s === currentStatus ? 'aria-current="true"' : ''}>
-          ${escapeHtml(s)}
-        </button>
-      `).join('')}
-      <div class="row-action-sep"></div>
-      <button class="row-action-item danger" data-act="delete" type="button">Supprimer du suivi</button>
-    `;
-
-    // Position below button, right-aligned
-    const rect = anchorEl.getBoundingClientRect();
-    menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
-    menu.style.right = `${document.documentElement.clientWidth - rect.right - window.scrollX}px`;
-    menu.style.left = 'auto';
-    menu.classList.remove('hidden');
-
-    // Wire actions
-    menu.querySelectorAll('[data-act]').forEach((btn) => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const act = btn.dataset.act;
-        close();
-        if (act === 'pin') {
-          await togglePin(item.id);
-          await load();
-        } else if (act === 'status') {
-          const newStatus = btn.dataset.value;
-          if (newStatus !== currentStatus) {
-            await updateStatus(item.id, newStatus, item.notes || '');
-            await load();
-          }
-        } else if (act === 'delete') {
-          const okConfirm = window.confirm(`Supprimer cette annonce du suivi ?`);
-          if (!okConfirm) return;
-          const ok = await deleteListing(item.id);
-          if (ok) await load();
-        }
+async function runScansSequentially(slugs) {
+  for (const slug of slugs) {
+    await new Promise((resolve) => {
+      startScan(slug, {
+        onListing: (listing) => {
+          state.payload.listings = upsertListing(state.payload.listings, listing);
+          addListing(listing, { animate: true });
+        },
+        onScanDone: () => { refreshAll().finally(resolve); },
+        onScanError: () => resolve()
       });
     });
   }
-
-  // Click outside, Escape, scroll → close
-  document.addEventListener('click', (e) => {
-    if (!menu.classList.contains('hidden') && !menu.contains(e.target) && e.target !== currentAnchor) {
-      close();
-    }
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !menu.classList.contains('hidden')) close();
-  });
-  window.addEventListener('scroll', () => {
-    if (!menu.classList.contains('hidden')) close();
-  }, true);
-
-  return { open, close };
-})();
-
-function openRowActionMenu(anchorEl, item) {
-  rowActionMenu.open(anchorEl, item);
 }
 
-load();
+function upsertListing(list, listing) {
+  const idx = list.findIndex((l) => l.id === listing.id);
+  if (idx === -1) return [...list, listing];
+  const next = list.slice();
+  next[idx] = { ...next[idx], ...listing };
+  return next;
+}
+
+function hydrateFilterState() {
+  const fromStorage = readJson(localStorage.getItem(STATE_KEY));
+  const base = defaultFilterState();
+  if (!fromStorage) return base;
+  return {
+    hiddenProfiles: new Set(fromStorage.hiddenProfiles || []),
+    recent: fromStorage.recent || base.recent,
+    unreadOnly: !!fromStorage.unreadOnly,
+    statuses: new Set(fromStorage.statuses || [...base.statuses]),
+    priorities: new Set(fromStorage.priorities || [...base.priorities]),
+    sources: fromStorage.sources ? new Set(fromStorage.sources) : null
+  };
+}
+
+function persistFilterState(s) {
+  const serializable = {
+    hiddenProfiles: [...s.hiddenProfiles],
+    recent: s.recent,
+    unreadOnly: s.unreadOnly,
+    statuses: [...s.statuses],
+    priorities: [...s.priorities],
+    sources: s.sources ? [...s.sources] : null
+  };
+  localStorage.setItem(STATE_KEY, JSON.stringify(serializable));
+  syncUrl(s);
+}
+
+function syncUrl(s) {
+  const params = new URLSearchParams(window.location.search);
+  const visible = state.payload.profiles
+    .map((p) => p.slug)
+    .filter((slug) => !s.hiddenProfiles.has(slug));
+  if (visible.length && visible.length < state.payload.profiles.length) {
+    params.set('profiles', visible.join(','));
+  } else {
+    params.delete('profiles');
+  }
+  if (s.recent && s.recent !== 'any') params.set('recent', s.recent); else params.delete('recent');
+  if (s.unreadOnly) params.set('unread', '1'); else params.delete('unread');
+
+  const next = params.toString();
+  const url = window.location.pathname + (next ? '?' + next : '');
+  window.history.replaceState(null, '', url);
+}
+
+function applyUrlOverridesAfterPayload() {
+  const params = new URLSearchParams(window.location.search);
+  const profilesParam = params.get('profiles');
+  if (profilesParam) {
+    const requested = new Set(profilesParam.split(',').filter(Boolean));
+    state.filter.hiddenProfiles = new Set(
+      state.payload.profiles.map((p) => p.slug).filter((slug) => !requested.has(slug))
+    );
+  }
+  const recent = params.get('recent');
+  if (recent && ['1d', '3d', '7d', '14d'].includes(recent)) state.filter.recent = recent;
+  if (params.get('unread') === '1') state.filter.unreadOnly = true;
+
+  persistFilterState(state.filter);
+  rerender();
+}
+
+function readJson(raw) {
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+bootstrap().catch((err) => {
+  console.error('bootstrap failed', err);
+  alert('Erreur au démarrage: ' + err.message);
+});
