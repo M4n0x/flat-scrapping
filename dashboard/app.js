@@ -1,11 +1,12 @@
-const cardsEl = document.getElementById('cards');
+const kpisEl = document.getElementById('kpis');
 const rowsEl = document.getElementById('rows');
 const mobileRowsEl = document.getElementById('mobile-rows');
 const kanbanEl = document.getElementById('kanban-board');
-const subEl = document.getElementById('sub');
 const refreshBtn = document.getElementById('refresh');
 const scanBtn = document.getElementById('scan');
 const scanOut = document.getElementById('scan-output');
+const scanDialog = document.getElementById('scan-dialog');
+const lastScanEl = document.getElementById('last-scan');
 const filterEl = document.getElementById('priority-filter');
 const sortEl = document.getElementById('sort-by');
 const searchEl = document.getElementById('search-box');
@@ -13,9 +14,8 @@ const tabTableEl = document.getElementById('tab-table');
 const tabKanbanEl = document.getElementById('tab-kanban');
 const panelTableEl = document.getElementById('panel-table');
 const panelKanbanEl = document.getElementById('panel-kanban');
-const heroTitleEl = document.querySelector('.hero h1');
-const zonesEl = document.getElementById('zones');
-
+const pageTitleEl = document.getElementById('page-title');
+const pageMetaEl = document.getElementById('page-meta');
 const profileSwitcherEl = document.getElementById('profile-switcher');
 
 const PROFILE = (() => {
@@ -50,9 +50,9 @@ async function loadProfileSwitcher() {
     // Update title/zones from profile data
     const current = profiles.find((p) => p.slug === PROFILE);
     if (current) {
-      if (heroTitleEl) heroTitleEl.textContent = PROFILE_TITLES[PROFILE] || current.name;
+      if (pageTitleEl) pageTitleEl.textContent = PROFILE_TITLES[PROFILE] || current.name;
       profileAreasText = current.areas ? `Zones: ${current.areas}` : '';
-      if (zonesEl) zonesEl.textContent = profileAreasText;
+      if (pageMetaEl) pageMetaEl.textContent = profileAreasText;
     }
 
     // Add "manage" option at the end
@@ -83,14 +83,11 @@ async function loadProfileSwitcher() {
 
 loadProfileSwitcher();
 
-if (heroTitleEl) {
-  heroTitleEl.textContent = PROFILE_TITLES[PROFILE] || `Suivi ${PROFILE}`;
+if (pageTitleEl) {
+  pageTitleEl.textContent = PROFILE_TITLES[PROFILE] || `Suivi ${PROFILE}`;
 }
-if (zonesEl) {
-  zonesEl.textContent = profileAreasText;
-}
-if (subEl) {
-  subEl.textContent = `Profil: ${PROFILE} · chargement…`;
+if (pageMetaEl) {
+  pageMetaEl.textContent = profileAreasText;
 }
 
 function apiUrl(pathname) {
@@ -214,19 +211,27 @@ function travelInlineLabel(item) {
   return `Travail: ${distanceLabel(item)} · 🚗 ${travelMinutesLabel(item, 'drive')} · 🚌 ${travelMinutesLabel(item, 'transit')}`;
 }
 
-function card(label, value, key = 'all') {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'card card-filter';
-  if (activeCardFilter === key) button.classList.add('active');
-
-  button.innerHTML = `<div class="label">${label}</div><div class="value">${value}</div>`;
-  button.addEventListener('click', () => {
-    activeCardFilter = activeCardFilter === key ? 'all' : key;
-    renderAll(latestState);
-  });
-
-  return button;
+function renderKpis(stats) {
+  // stats = [{ label: 'Total', value: 42, accent: false, delta: '+3 cette semaine' }, ...]
+  kpisEl.innerHTML = '';
+  for (const s of stats) {
+    const div = document.createElement('div');
+    div.className = 'kpi';
+    const lbl = document.createElement('div');
+    lbl.className = 'kpi-lbl';
+    lbl.textContent = s.label;
+    const val = document.createElement('div');
+    val.className = s.accent ? 'kpi-val accent' : 'kpi-val';
+    val.textContent = String(s.value);
+    div.append(lbl, val);
+    if (s.delta) {
+      const delta = document.createElement('div');
+      delta.className = 'kpi-delta';
+      delta.textContent = s.delta;
+      div.append(delta);
+    }
+    kpisEl.append(div);
+  }
 }
 
 async function updateStatus(id, status, notes) {
@@ -675,26 +680,23 @@ function attachKanbanDropzone(body, targetStatus) {
   });
 }
 
-function setActiveView(view, persist = true) {
-  const tableActive = view !== 'kanban';
-
-  tabTableEl.classList.toggle('active', tableActive);
-  tabKanbanEl.classList.toggle('active', !tableActive);
-  panelTableEl.classList.toggle('active', tableActive);
-  panelKanbanEl.classList.toggle('active', !tableActive);
-
-  if (persist) {
-    localStorage.setItem('apartment-dashboard:view', tableActive ? 'table' : 'kanban');
-  }
+function setActiveView(view) {
+  const tabs = [tabTableEl, tabKanbanEl];
+  const panels = [panelTableEl, panelKanbanEl];
+  tabs.forEach((t) => {
+    if (!t) return;
+    const isActive = t.dataset.view === view;
+    t.classList.toggle('active', isActive);
+    t.setAttribute('aria-selected', String(isActive));
+  });
+  panels.forEach((p) => {
+    if (!p) return;
+    p.classList.toggle('active', p.id === `panel-${view}`);
+  });
+  localStorage.setItem('apartment-dashboard:view', view);
 }
-
-function initViewTabs() {
-  const saved = localStorage.getItem('apartment-dashboard:view');
-  setActiveView(saved === 'kanban' ? 'kanban' : 'table', false);
-
-  tabTableEl.addEventListener('click', () => setActiveView('table'));
-  tabKanbanEl.addEventListener('click', () => setActiveView('kanban'));
-}
+tabTableEl?.addEventListener('click', () => setActiveView('table'));
+tabKanbanEl?.addEventListener('click', () => setActiveView('kanban'));
 
 function createThumbCell(item) {
   const urls = getImageUrls(item);
@@ -1129,8 +1131,6 @@ function renderMobile(listings) {
 }
 
 function renderCards(listings, latest) {
-  cardsEl.innerHTML = '';
-
   const top = listings.filter((x) => String(x.priority || '').startsWith('A') && !x.isRemoved).length;
   const urgent = listings.filter((x) => getUrgency(x).level === 'high' && !x.isRemoved).length;
   const removed = listings.filter((x) => !!x.isRemoved).length;
@@ -1141,14 +1141,14 @@ function renderCards(listings, latest) {
     return !x.isRemoved && (stage === 'early_market' || stage === 'off_market');
   }).length;
 
-  cardsEl.append(
-    card('Annonces visibles', listings.length, 'all'),
-    card('Priorité haute', top, 'top'),
-    card('Régie directe', direct, 'direct'),
-    card('Urgentes', urgent, 'urgent'),
-    card('Nouvelles', news, 'new'),
-    card('Retirées', removed, 'removed')
-  );
+  renderKpis([
+    { label: 'Annonces visibles', value: listings.length },
+    { label: 'Priorité A', value: top, accent: true },
+    { label: 'Régie directe', value: direct },
+    { label: 'Urgentes', value: urgent },
+    { label: 'Nouvelles', value: news },
+    { label: 'Retirées', value: removed }
+  ]);
 }
 
 function renderAll(latest) {
@@ -1173,19 +1173,58 @@ async function load() {
   const removedCount = allListings.filter((x) => x.isRemoved).length;
 
   const effectiveProfile = String(profile || PROFILE || 'vevey');
-  if (heroTitleEl) {
-    heroTitleEl.textContent = PROFILE_TITLES[effectiveProfile] || `Suivi ${effectiveProfile}`;
+  if (pageTitleEl) {
+    pageTitleEl.textContent = PROFILE_TITLES[effectiveProfile] || `Suivi ${effectiveProfile}`;
   }
   if (typeof areas === 'string' && areas.trim()) {
     profileAreasText = `Zones: ${areas}`;
   }
-  if (zonesEl) {
-    zonesEl.textContent = profileAreasText;
+  if (pageMetaEl) {
+    pageMetaEl.textContent = profileAreasText;
   }
 
-  subEl.textContent = `Profil: ${effectiveProfile} · Dernier scan: ${shortWhen(latest.generatedAt)} · ${activeCount} actives · ${removedCount} retirées`;
+  if (lastScanEl && !lastScanEl.classList.contains('running')) {
+    lastScanEl.textContent = `Dernier scan: ${shortWhen(latest.generatedAt)} · ${activeCount} actives · ${removedCount} retirées`;
+  }
   renderAll(latestState);
 }
+
+const refresh = load;
+
+function openDialog(dialog) {
+  if (!dialog) return;
+  dialog.dataset.prevFocus = '';
+  const prev = document.activeElement;
+  if (prev && prev !== document.body) {
+    dialog.__prevFocus = prev;
+  }
+  dialog.classList.add('open');
+  const first = dialog.querySelector(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  );
+  first?.focus();
+}
+function closeDialog(dialog) {
+  if (!dialog) return;
+  dialog.classList.remove('open');
+  const prev = dialog.__prevFocus;
+  if (prev && typeof prev.focus === 'function') prev.focus();
+  dialog.__prevFocus = null;
+}
+function setupDialogClose(dialog) {
+  if (!dialog) return;
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog || e.target.closest?.('[data-close-dialog]')) {
+      closeDialog(dialog);
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && dialog.classList.contains('open')) {
+      closeDialog(dialog);
+    }
+  });
+}
+setupDialogClose(scanDialog);
 
 refreshBtn.addEventListener('click', load);
 filterEl.addEventListener('change', () => renderAll(latestState));
@@ -1202,23 +1241,35 @@ if (savedSort && sortEl.querySelector(`option[value="${savedSort}"]`)) {
 }
 
 scanBtn.addEventListener('click', async () => {
-  scanBtn.disabled = true;
-  scanOut.classList.remove('hidden');
-  scanOut.textContent = 'Scan en cours…';
+  scanOut.textContent = '';
+  openDialog(scanDialog);
+  lastScanEl.classList.remove('hidden');
+  lastScanEl.classList.add('running');
+  lastScanEl.textContent = 'Scan en cours…';
 
   try {
     const res = await fetch(apiUrl('/api/run-scan'), { method: 'POST' });
-    const data = await res.json();
-    scanOut.textContent = data.ok ? data.summary : `Erreur: ${data.error}`;
-    await load();
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      scanOut.textContent += decoder.decode(value, { stream: true });
+      scanOut.scrollTop = scanOut.scrollHeight;
+    }
+    lastScanEl.classList.remove('running');
+    lastScanEl.textContent = 'Dernier scan à l\'instant';
+    await refresh();
   } catch (err) {
-    scanOut.textContent = `Erreur: ${err.message}`;
-  } finally {
-    scanBtn.disabled = false;
+    scanOut.textContent += `\n[error] ${err.message}`;
+    lastScanEl.classList.remove('running');
+    lastScanEl.textContent = 'Scan échoué';
   }
 });
 
-initViewTabs();
+// Restore saved view or default to table
+const savedView = localStorage.getItem('apartment-dashboard:view');
+setActiveView(savedView === 'kanban' ? 'kanban' : 'table');
 
 // ── Lightbox ──
 
