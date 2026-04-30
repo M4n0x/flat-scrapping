@@ -59,3 +59,15 @@ test('migrateStatus returns null for unknown values so callers can decide', () =
   assert.equal(migrateStatus(null), null);
   assert.equal(migrateStatus('Random'), null);
 });
+
+test('migrateStatus maps granular legacy variants to the right bucket', () => {
+  // Visite-bucket variants
+  assert.equal(migrateStatus('Visite demandée'), 'pursuing');
+  assert.equal(migrateStatus('Visite planifiée'), 'pursuing');
+  assert.equal(migrateStatus('Visité'), 'pursuing');
+  // Dossier-bucket variants
+  assert.equal(migrateStatus('Dossier prêt à envoyer'), 'pursuing');
+  assert.equal(migrateStatus('Dossier envoyé'), 'pursuing');
+  // Relance-bucket variants
+  assert.equal(migrateStatus('Relance J+2'), 'pursuing');
+});

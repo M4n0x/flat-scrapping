@@ -11,8 +11,14 @@ export const STATUS_LABELS = {
 const LEGACY_TO_NEW = new Map([
   ['à contacter', 'sorting'],
   ['visite', 'pursuing'],
+  ['visite demandée', 'pursuing'],
+  ['visite planifiée', 'pursuing'],
+  ['visité', 'pursuing'],
   ['dossier', 'pursuing'],
+  ['dossier prêt à envoyer', 'pursuing'],
+  ['dossier envoyé', 'pursuing'],
   ['relance', 'pursuing'],
+  ['relance j+2', 'pursuing'],
   ['accepté', 'pursuing'],
   ['refusé', 'archived'],
   ['sans réponse', 'archived']
