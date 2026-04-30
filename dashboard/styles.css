@@ -592,7 +592,6 @@ select#filter-recent { width: 100%; }
   border-top: 1px solid var(--border-soft);
   margin-top: auto;
 }
-.editor-foot .btn:last-child { margin-left: auto; }
 
-.editor-delete { color: var(--danger); }
-.editor-delete:hover { color: var(--danger-dark); }
+/* Delete button sits on the far left; primary action (Enregistrer) on the right. */
+.editor-foot .editor-delete { order: -1; margin-right: auto; }

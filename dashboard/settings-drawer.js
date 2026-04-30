@@ -588,8 +588,10 @@ async function renderEditor(slug) {
   if (profile) {
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
-    delBtn.className = 'btn btn-ghost editor-delete';
-    delBtn.textContent = 'Supprimer';
+    delBtn.className = 'btn btn-destructive editor-delete';
+    const trashIcon = document.createElement('i');
+    trashIcon.className = 'fa-solid fa-trash';
+    delBtn.append(trashIcon, document.createTextNode(' Supprimer'));
     delBtn.addEventListener('click', () => onDelete(profile.slug));
     foot.appendChild(delBtn);
   }
