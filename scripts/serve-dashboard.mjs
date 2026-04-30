@@ -689,8 +689,8 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (req.method === 'GET' && (u.pathname === '/' || u.pathname === '/dashboard' || u.pathname === '/dashboard/')) {
-    return serveFile(res, path.join(DASHBOARD_DIR, 'home.html'));
+  if (req.method === 'GET' && u.pathname === '/') {
+    return serveFile(res, path.join(DASHBOARD_DIR, 'index.html'));
   }
 
   const rootProfileMatch = u.pathname.match(/^\/([a-z0-9-]+)\/?$/i);
@@ -700,10 +700,10 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  const profileTrailingSlashMatch = u.pathname.match(/^\/([a-z0-9-]+)\/dashboard\/$/i);
-  if (req.method === 'GET' && profileTrailingSlashMatch) {
-    const profile = sanitizeProfile(profileTrailingSlashMatch[1]);
-    res.writeHead(302, { location: `/${profile}/dashboard` });
+  const profileDashboardMatch = u.pathname.match(/^\/([a-z0-9-]+)\/dashboard\/?$/i);
+  if (req.method === 'GET' && profileDashboardMatch) {
+    const slug = profileDashboardMatch[1];
+    res.writeHead(302, { Location: '/?profiles=' + encodeURIComponent(slug) });
     return res.end();
   }
 
@@ -717,17 +717,6 @@ const server = http.createServer(async (req, res) => {
     return serveFile(res, path.join(DASHBOARD_DIR, profileAssetMatch[2]));
   }
 
-  const dashboardMatch = u.pathname.match(/^\/([a-z0-9-]+)\/dashboard(?:\/(.*))?$/i);
-  if (req.method === 'GET' && dashboardMatch) {
-    const profile = sanitizeProfile(dashboardMatch[1]);
-    const relative = dashboardMatch[2] || 'index.html';
-
-    if (relative === 'index.html') {
-      await ensureProfileStorage(profile);
-    }
-
-    return serveFile(res, path.join(DASHBOARD_DIR, relative));
-  }
 
   if (req.method === 'GET' && u.pathname.startsWith('/data/')) {
     const relative = u.pathname.replace('/data/', '');
