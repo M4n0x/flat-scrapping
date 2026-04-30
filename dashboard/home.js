@@ -1,7 +1,6 @@
 import { formatMarkerDetails, popupHtml } from './map-utils.js';
 
 const gridEl = document.getElementById('profiles-grid');
-const createSection = document.getElementById('create-section');
 const formEl = document.getElementById('profile-form');
 const formTitleEl = document.getElementById('form-title');
 const formSubmitEl = document.getElementById('form-submit');
@@ -22,6 +21,57 @@ const mapStatusEl = document.getElementById('map-status');
 const mapEmptyEl = document.getElementById('map-empty');
 const mapModePointsEl = document.getElementById('map-mode-points');
 const mapModeDetailsEl = document.getElementById('map-mode-details');
+const profileDialog = document.getElementById('profile-dialog');
+const openCreateBtn = document.getElementById('open-create-dialog');
+
+// --- Dialog helpers ---
+
+function openDialog(dialog) {
+  if (!dialog) return;
+  const prev = document.activeElement;
+  if (prev && prev !== document.body) dialog.__prevFocus = prev;
+  dialog.classList.add('open');
+  const first = dialog.querySelector(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  );
+  first?.focus();
+}
+function closeDialog(dialog) {
+  if (!dialog) return;
+  dialog.classList.remove('open');
+  const prev = dialog.__prevFocus;
+  if (prev && typeof prev.focus === 'function') prev.focus();
+  dialog.__prevFocus = null;
+}
+function setupDialogClose(dialog) {
+  if (!dialog) return;
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog || e.target.closest?.('[data-close-dialog]')) closeDialog(dialog);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && dialog.classList.contains('open')) closeDialog(dialog);
+  });
+}
+setupDialogClose(profileDialog);
+
+function openProfileDialog({ mode, profile } = { mode: 'create' }) {
+  if (mode === 'edit' && profile) {
+    formTitleEl.textContent = `Modifier · ${profile.label || profile.slug}`;
+    formSubmitEl.textContent = 'Enregistrer';
+    fillFormFromProfile(profile);
+  } else {
+    formTitleEl.textContent = 'Nouveau profil';
+    formSubmitEl.textContent = 'Créer le profil';
+    resetForm();
+  }
+  openDialog(profileDialog);
+}
+
+function closeProfileDialog() {
+  closeDialog(profileDialog);
+}
+
+openCreateBtn?.addEventListener('click', () => openProfileDialog({ mode: 'create' }));
 
 const HOME_VIEW_STORAGE_KEY = 'apartment-home:view';
 const MAP_MODE_STORAGE_KEY = 'apartment-map:mode';
@@ -224,45 +274,43 @@ function renderZones() {
 
 // --- Form logic ---
 
-function showForm(mode = 'create', profile = null) {
-  createSection.classList.remove('hidden');
-
-  if (mode === 'edit' && profile) {
-    formTitleEl.textContent = `Modifier – ${profile.shortTitle || profile.slug}`;
-    formSubmitEl.textContent = 'Enregistrer';
-    editSlugEl.value = profile.slug;
-
-    document.getElementById('f-title').value = profile.shortTitle || '';
-    zones = [...(profile.areas || [])];
-    document.getElementById('f-min-rent').value = profile.filters?.minTotalChf ?? 0;
-    document.getElementById('f-max-rent').value = profile.filters?.maxTotalChf ?? 1400;
-    document.getElementById('f-min-rooms').value = profile.filters?.minRoomsPreferred ?? 2;
-    document.getElementById('f-min-surface').value = profile.filters?.minSurfaceM2Preferred ?? 0;
-    document.getElementById('f-max-age').value = profile.filters?.maxPublishedAgeDays ?? 30;
-    document.getElementById('f-allow-missing-surface').checked = profile.filters?.allowMissingSurface !== false;
-    document.getElementById('f-workplace').value = profile.preferences?.workplaceAddress ?? '';
-    document.getElementById('s-immobilier').checked = profile.sources?.immobilier !== false;
-    document.getElementById('s-flatfox').checked = profile.sources?.flatfox !== false;
-    document.getElementById('s-naef').checked = profile.sources?.naef !== false;
-    document.getElementById('s-bernard').checked = profile.sources?.bernardNicod !== false;
-    document.getElementById('s-rp-listings').checked = profile.sources?.retraitesListings !== false;
-    document.getElementById('s-rp-projects').checked = profile.sources?.retraitesProjets !== false;
-    document.getElementById('s-anibis').checked = !!profile.sources?.anibis;
-  } else {
-    formTitleEl.textContent = 'Nouveau profil';
-    formSubmitEl.textContent = 'Créer le profil';
-    editSlugEl.value = '';
-    formEl.reset();
-    zones = [];
-    document.getElementById('f-allow-missing-surface').checked = true;
-  }
-
+function fillFormFromProfile(profile) {
+  editSlugEl.value = profile.slug;
+  document.getElementById('f-title').value = profile.shortTitle || profile.label || '';
+  zones = [...(profile.areas || [])];
+  document.getElementById('f-min-rent').value = profile.filters?.minTotalChf ?? profile.minRent ?? 0;
+  document.getElementById('f-max-rent').value = profile.filters?.maxTotalChf ?? profile.maxRent ?? 1400;
+  document.getElementById('f-min-rooms').value = profile.filters?.minRoomsPreferred ?? profile.minRooms ?? 2;
+  document.getElementById('f-min-surface').value = profile.filters?.minSurfaceM2Preferred ?? 0;
+  document.getElementById('f-max-age').value = profile.filters?.maxPublishedAgeDays ?? 30;
+  document.getElementById('f-allow-missing-surface').checked = profile.filters?.allowMissingSurface !== false;
+  document.getElementById('f-workplace').value = profile.preferences?.workplaceAddress ?? '';
+  document.getElementById('s-immobilier').checked = profile.sources?.immobilier !== false;
+  document.getElementById('s-flatfox').checked = profile.sources?.flatfox !== false;
+  document.getElementById('s-naef').checked = profile.sources?.naef !== false;
+  document.getElementById('s-bernard').checked = profile.sources?.bernardNicod !== false;
+  document.getElementById('s-rp-listings').checked = profile.sources?.retraitesListings !== false;
+  document.getElementById('s-rp-projects').checked = profile.sources?.retraitesProjets !== false;
+  document.getElementById('s-anibis').checked = !!profile.sources?.anibis;
   renderZones();
-  createSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function resetForm() {
+  editSlugEl.value = '';
+  formEl.reset();
+  zones = [];
+  document.getElementById('f-allow-missing-surface').checked = true;
+  zoneSearchEl.value = '';
+  zoneSuggestionsEl.classList.add('hidden');
+  renderZones();
+}
+
+function showForm(mode = 'create', profile = null) {
+  openProfileDialog({ mode, profile });
 }
 
 function hideForm() {
-  createSection.classList.add('hidden');
+  closeProfileDialog();
   editSlugEl.value = '';
   zones = [];
   zoneSearchEl.value = '';
@@ -350,55 +398,94 @@ formEl.addEventListener('submit', async (e) => {
   }
 });
 
+// --- Helpers ---
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function formatPrice(n) {
+  if (n == null || isNaN(n)) return '—';
+  return Math.round(n).toLocaleString('fr-CH').replace(/ |\s/g, "'");
+}
+function formatRelative(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const hr = ms / 3.6e6;
+  if (hr < 1) return `${Math.round(ms / 6e4)} min`;
+  if (hr < 24) return `${Math.round(hr)}h`;
+  return `${Math.round(hr / 24)}j`;
+}
+function cssColor(s) {
+  return /^#[0-9a-f]{3,8}$|^rgba?\([\d.,\s%]+\)$|^[a-z]+$/i.test(String(s || '').trim())
+    ? String(s).trim()
+    : 'var(--muted)';
+}
+
 // --- Profile cards ---
 
-function escapeHtml(s = '') {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function buildProfileCard(profile) {
+  const a = document.createElement('a');
+  a.className = 'profile-card';
+  a.href = `/${encodeURIComponent(profile.slug)}/dashboard`;
+
+  const zonesArr = profile.areas || [];
+  const zonesHtml = zonesArr.slice(0, 3)
+    .map((z) => `<span class="badge badge-direct">${escapeHtml((z && z.label) || z)}</span>`)
+    .join('');
+  const moreZones = zonesArr.length > 3
+    ? `<span class="badge">+${escapeHtml(String(zonesArr.length - 3))}</span>`
+    : '';
+
+  const lastScan = profile.lastScanAt
+    ? `Scan il y a ${escapeHtml(formatRelative(profile.lastScanAt))}`
+    : 'Jamais scanné';
+
+  a.innerHTML = `
+    <div class="profile-card-head">
+      <h3>${escapeHtml(profile.label || profile.shortTitle || profile.slug)}</h3>
+      <button class="row-actions" type="button" data-edit aria-label="Modifier le profil">⋯</button>
+    </div>
+    <div class="profile-card-zones">${zonesHtml}${moreZones}</div>
+    <div class="profile-card-meta">
+      <span>CHF ${escapeHtml(formatPrice(profile.minRent ?? profile.filters?.minTotalChf ?? 0))} – ${escapeHtml(formatPrice(profile.maxRent ?? profile.filters?.maxTotalChf ?? 0))}</span>
+      <span>·</span>
+      <span>${escapeHtml(String(profile.minRooms ?? profile.filters?.minRoomsPreferred ?? '—'))} pièces min</span>
+    </div>
+    <div class="profile-card-stats">
+      <div class="profile-card-stat"><div class="lbl">Total</div><div class="val">${escapeHtml(String(profile.listingCount ?? 0))}</div></div>
+      <div class="profile-card-stat"><div class="lbl">Priorité A</div><div class="val">${escapeHtml(String(profile.priorityACount ?? 0))}</div></div>
+      <div class="profile-card-stat"><div class="lbl">Direct</div><div class="val">${escapeHtml(String(profile.directCount ?? 0))}</div></div>
+    </div>
+    <div class="profile-card-meta"><span>${lastScan}</span></div>
+  `;
+
+  a.querySelector('[data-edit]')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openProfileDialog({ mode: 'edit', profile });
+  });
+  return a;
 }
 
 function renderProfiles(profiles) {
   gridEl.innerHTML = '';
   allProfiles = profiles;
 
-  for (const p of profiles) {
-    const card = document.createElement('article');
-    card.className = 'profile-card';
-
-    const lastScan = p.lastScanAt
-      ? new Date(p.lastScanAt).toLocaleString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-      : 'Jamais';
-
-    const profileUrl = `/${encodeURIComponent(p.slug)}/dashboard`;
-
-    card.innerHTML = `
-      <a href="${profileUrl}" class="card-link">
-        <h3>${escapeHtml(p.shortTitle || p.name)}</h3>
-        <div class="card-zones">${escapeHtml(p.areas || 'Aucune zone')}</div>
-      </a>
-      <div class="card-stats">
-        <span>📊 ${p.listingsCount ?? '–'} annonces</span>
-        <span>💰 max CHF ${p.maxRent ?? '–'}</span>
-        <span>🔄 ${escapeHtml(lastScan)}</span>
-      </div>
-      <div class="card-actions">
-        <a href="${profileUrl}" class="btn primary">Ouvrir</a>
-        <button type="button" class="btn edit-btn" data-slug="${escapeHtml(p.slug)}">Modifier</button>
-        <button type="button" class="btn danger delete-btn" data-slug="${escapeHtml(p.slug)}" data-name="${escapeHtml(p.label || p.slug)}">Supprimer</button>
+  if (!profiles.length) {
+    gridEl.innerHTML = `
+      <div class="empty" style="grid-column: 1 / -1;">
+        <div class="empty-icon">&#127968;</div>
+        <h3>Aucun profil pour le moment</h3>
+        <p>Créez un profil pour commencer à suivre les annonces dans vos zones.</p>
+        <button class="btn btn-primary" type="button" id="empty-create-btn">Créer un profil</button>
       </div>
     `;
-
-    card.querySelector('.edit-btn').addEventListener('click', (e) => { e.preventDefault(); editProfile(p.slug); });
-    card.querySelector('.delete-btn').addEventListener('click', (e) => { e.preventDefault(); confirmDelete(e.currentTarget); });
-
-    gridEl.appendChild(card);
+    document.getElementById('empty-create-btn')?.addEventListener('click', () => openProfileDialog({ mode: 'create' }));
+    return;
   }
 
-  // Add card
-  const addCard = document.createElement('article');
-  addCard.className = 'profile-card add-card';
-  addCard.innerHTML = `<div class="add-icon">+</div><div class="add-label">Créer un profil</div>`;
-  addCard.addEventListener('click', () => showForm('create'));
-  gridEl.appendChild(addCard);
+  for (const p of profiles) {
+    gridEl.appendChild(buildProfileCard(p));
+  }
 }
 
 async function editProfile(slug) {
@@ -629,28 +716,49 @@ function createMapIcon(item) {
   });
 }
 
+function buildMapFilterRow(slug, label, color, count) {
+  const row = document.createElement('label');
+  row.className = 'checkbox map-filter-row';
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.dataset.profileFilter = slug;
+  cb.checked = true;
+
+  const swatch = document.createElement('span');
+  swatch.className = 'swatch';
+  swatch.style.background = cssColor(color);
+
+  const name = document.createElement('span');
+  name.className = 'profile-name';
+  name.textContent = label;
+
+  const countEl = document.createElement('span');
+  countEl.className = 'count';
+  countEl.textContent = String(count);
+
+  row.append(cb, swatch, name, countEl);
+  return row;
+}
+
 function renderMapFilters() {
   if (!mapPayload) return;
   mapProfileFiltersEl.innerHTML = '';
 
   for (const profile of mapPayload.profiles) {
-    const label = document.createElement('label');
-    label.className = 'map-profile-filter';
-    label.innerHTML = `
-      <input type="checkbox" value="${escapeHtml(profile.slug)}" ${visibleProfileSlugs.has(profile.slug) ? 'checked' : ''} />
-      <span class="map-profile-swatch" style="background:${escapeHtml(profile.color)}"></span>
-      <span>${escapeHtml(profile.title)}</span>
-      <span class="map-profile-count">${profile.mappedCount}/${profile.totalActiveDisplayed}</span>
-    `;
+    const count = `${profile.mappedCount}/${profile.totalActiveDisplayed}`;
+    const row = buildMapFilterRow(profile.slug, profile.title, profile.color, count);
+    const cb = row.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = visibleProfileSlugs.has(profile.slug);
 
-    label.querySelector('input').addEventListener('change', (event) => {
+    cb?.addEventListener('change', (event) => {
       if (event.currentTarget.checked) visibleProfileSlugs.add(profile.slug);
       else visibleProfileSlugs.delete(profile.slug);
       saveVisibleProfileSlugs();
       renderMapMarkers(true);
     });
 
-    mapProfileFiltersEl.appendChild(label);
+    mapProfileFiltersEl.appendChild(row);
   }
 }
 
