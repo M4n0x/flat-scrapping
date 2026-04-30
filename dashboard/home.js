@@ -49,7 +49,10 @@ function setupDialogClose(dialog) {
     if (e.target === dialog || e.target.closest?.('[data-close-dialog]')) closeDialog(dialog);
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && dialog.classList.contains('open')) closeDialog(dialog);
+    if (e.key !== 'Escape' || !dialog.classList.contains('open')) return;
+    const openSuggestions = dialog.querySelector('.zone-suggestions:not(.hidden)');
+    if (openSuggestions) return; // let the autocomplete's own handler close suggestions first
+    closeDialog(dialog);
   });
 }
 setupDialogClose(profileDialog);
@@ -415,7 +418,7 @@ function formatRelative(iso) {
   return `${Math.round(hr / 24)}j`;
 }
 function cssColor(s) {
-  return /^#[0-9a-f]{3,8}$|^rgba?\([\d.,\s%]+\)$|^[a-z]+$/i.test(String(s || '').trim())
+  return /^#[0-9a-f]{3,8}$|^rgba?\([\d.,\s%]+\)$|^hsla?\([\d.,\s%deg]+\)$|^[a-z]+$/i.test(String(s || '').trim())
     ? String(s).trim()
     : 'var(--muted)';
 }
@@ -427,13 +430,11 @@ function buildProfileCard(profile) {
   a.className = 'profile-card';
   a.href = `/${encodeURIComponent(profile.slug)}/dashboard`;
 
-  const zonesArr = profile.areas || [];
-  const zonesHtml = zonesArr.slice(0, 3)
-    .map((z) => `<span class="badge badge-direct">${escapeHtml((z && z.label) || z)}</span>`)
-    .join('');
-  const moreZones = zonesArr.length > 3
-    ? `<span class="badge">+${escapeHtml(String(zonesArr.length - 3))}</span>`
-    : '';
+  const zonesText = typeof profile.areas === 'string'
+    ? profile.areas
+    : Array.isArray(profile.areas)
+      ? profile.areas.map((z) => (z && z.label) || z).join(' · ')
+      : '';
 
   const lastScan = profile.lastScanAt
     ? `Scan il y a ${escapeHtml(formatRelative(profile.lastScanAt))}`
@@ -444,14 +445,14 @@ function buildProfileCard(profile) {
       <h3>${escapeHtml(profile.label || profile.shortTitle || profile.slug)}</h3>
       <button class="row-actions" type="button" data-edit aria-label="Modifier le profil">⋯</button>
     </div>
-    <div class="profile-card-zones">${zonesHtml}${moreZones}</div>
+    <div class="profile-card-meta"><span>${escapeHtml(zonesText)}</span></div>
     <div class="profile-card-meta">
       <span>CHF ${escapeHtml(formatPrice(profile.minRent ?? profile.filters?.minTotalChf ?? 0))} – ${escapeHtml(formatPrice(profile.maxRent ?? profile.filters?.maxTotalChf ?? 0))}</span>
       <span>·</span>
       <span>${escapeHtml(String(profile.minRooms ?? profile.filters?.minRoomsPreferred ?? '—'))} pièces min</span>
     </div>
     <div class="profile-card-stats">
-      <div class="profile-card-stat"><div class="lbl">Total</div><div class="val">${escapeHtml(String(profile.listingCount ?? 0))}</div></div>
+      <div class="profile-card-stat"><div class="lbl">Total</div><div class="val">${escapeHtml(String(profile.listingsCount ?? 0))}</div></div>
       <div class="profile-card-stat"><div class="lbl">Priorité A</div><div class="val">${escapeHtml(String(profile.priorityACount ?? 0))}</div></div>
       <div class="profile-card-stat"><div class="lbl">Direct</div><div class="val">${escapeHtml(String(profile.directCount ?? 0))}</div></div>
     </div>
@@ -461,7 +462,7 @@ function buildProfileCard(profile) {
   a.querySelector('[data-edit]')?.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    openProfileDialog({ mode: 'edit', profile });
+    editProfile(profile.slug);
   });
   return a;
 }
