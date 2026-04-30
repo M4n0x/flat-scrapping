@@ -1,6 +1,6 @@
 # Apartment Search 🏠
 
-Local dashboard for tracking apartment listings in Switzerland. Automatically scrapes listings from immobilier.ch, flatfox.ch, naef.ch, bernard-nicod.ch, Retraites Populaires direct rentals + projects (off-market), and anibis.ch, then displays them in a dashboard with status tracking, scoring, and cross-source deduplication.
+Local dashboard for tracking apartment listings in Switzerland. Automatically scrapes listings from immobilier.ch, flatfox.ch, naef.ch, bernard-nicod.ch, Retraites Populaires direct rentals + projects (off-market), and anibis.ch, then displays them in a map-centric shell with status tracking, scoring, and cross-source deduplication.
 
 ## Prerequisites
 
@@ -29,7 +29,7 @@ Copy `.env.example` to `.env` and fill in the values you need:
 
 ## First Run
 
-On first access, the home page shows the profile list (empty initially). Click **"Créer un profil"** to configure:
+The app opens at `/`. Click the settings icon (left-sliding drawer) to create your first profile:
 
 - **Title** — short profile name (e.g. "Vevey et environs")
 - **Zones** — search and select Swiss municipalities via autocomplete (powered by [geo.admin.ch](https://api3.geo.admin.ch)). Canton, slug, and coordinates are derived automatically.
@@ -42,20 +42,24 @@ Each profile is independent with its own data and criteria.
 
 ## Usage
 
-### Dashboard
+### Map Shell
 
-Each profile has its own dashboard at `/{profile}/dashboard`:
+The entire app lives at `/`. All profiles are shown simultaneously on an interactive map — each profile's pins are color-coded. Per-profile visibility is toggled via the sidebar.
 
-- **Table view** — sort by score, price, zone
-- **Kanban view** — tracking pipeline (À contacter → Visite → Dossier → etc.)
-- **Filters** — by priority and direct-regie listings
-- **Actions** — change status, add notes, delete
+**Sidebar filters:**
+- Profiles (show/hide individual profiles)
+- Recently found, unread
+- Status: `sorting` / `pursuing` / `archived`
+- Priority (A, A-, B)
+- Sources
+
+Clicking a pin opens a popup with key listing details. A listings panel on the right shows the full filtered list.
 
 ### Running a Scan
 
 Two options:
 
-1. **From the dashboard** — click "Lancer un scan"
+1. **From the shell** — click "Lancer un scan" in the sidebar; pins drop live via SSE (`/api/run-scan-stream`).
 2. **CLI**:
    ```bash
    npm run scan -- --profile=vevey
@@ -65,23 +69,31 @@ The scan fetches new listings, deduplicates (same listing across multiple sites 
 
 ### Managing Profiles
 
-The home page (`/`) lets you:
+Open the settings drawer (left-sliding panel) to create, edit, or delete profiles. All profiles are always visible on the map; use the sidebar toggle to focus on one at a time.
 
-- View all profiles with listing count and budget
-- Create, edit, or delete profiles
-- Navigate to each profile's dashboard
+### Status Pipeline
 
-The profile switcher in the dashboard header also allows quick switching.
+Listings move through three states: `sorting → pursuing → archived`. The status can be changed via the row action menu in the listings panel.
+
+> **Legacy migration:** profiles that were tracked with the old 7-state French pipeline (`À contacter`, `Visite`, `Dossier`, etc.) are automatically migrated to the 3-state schema on first access. The migration runs lazily, so no manual action is required.
 
 ## Project Structure
 
 ```
 flat-scrapping/
 ├── dashboard/          # Frontend (HTML/CSS/JS, zero framework)
-│   ├── home.html       # Home page / profile management
-│   ├── index.html      # Per-profile dashboard
-│   ├── app.js          # Dashboard logic
-│   └── styles.css      # Shared styles
+│   ├── index.html      # App shell (single entry point)
+│   ├── app.js          # Root bootstrap + view orchestration
+│   ├── map.js          # Leaflet map, pin rendering, popup
+│   ├── sidebar.js      # Filter sidebar + profile toggles
+│   ├── listings-panel.js # Right-side listings table/list
+│   ├── scan.js         # SSE scan stream, live pin drops
+│   ├── settings-drawer.js # Left-sliding profile CRUD drawer
+│   ├── filter-logic.js # Pure filter/sort helpers
+│   ├── map-utils.js    # Geo utilities (distance, bounds)
+│   ├── tokens.css      # Design tokens
+│   ├── components.css  # Reusable component styles
+│   └── styles.css      # Layout and page-level styles
 ├── scripts/
 │   ├── serve-dashboard.mjs   # HTTP server + API
 │   └── scrape-immobilier.mjs # Multi-source scraper
@@ -89,7 +101,7 @@ flat-scrapping/
 │   └── profiles/       # One folder per profile (gitignored)
 │       └── {profile}/
 │           ├── watch-config.json     # Configuration
-│           ├── tracker.json          # Tracked listings
+│           ├── tracker.json          # Tracked listings (schemaVersion: 2)
 │           ├── latest-listings.json  # Latest scan results
 │           └── geocode-cache.json    # Geocoding cache
 ├── .env.example        # Environment variable template
@@ -102,7 +114,7 @@ flat-scrapping/
 2. **Deduplication** — by ID (intra-source), then by composite key address + rooms (floored) + surface (±5m²) + price (±50 CHF) for cross-source matching
 3. **Scoring** — each listing gets a 0-100 score based on profile criteria
 4. **Tracker** — listings are persisted and their status is tracked across scans
-5. **Dashboard** — real-time display with filters, sorting, and actions
+5. **Shell** — interactive map with sidebar filters, live scan pin drops, and listings panel
 
 ## Port
 
