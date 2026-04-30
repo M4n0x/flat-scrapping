@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildMapListingsPayload } from './map-listings.mjs';
+import { migrateTracker, TRACKER_SCHEMA_VERSION } from './tracker-migration.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,6 +64,12 @@ async function readJsonSafe(filePath, fallback) {
   } catch {
     return fallback;
   }
+}
+
+async function writeJsonAtomic(filePath, value) {
+  const tmpPath = `${filePath}.tmp`;
+  await fs.writeFile(tmpPath, JSON.stringify(value, null, 2));
+  await fs.rename(tmpPath, filePath);
 }
 
 async function fileExists(filePath) {
@@ -132,6 +139,14 @@ async function ensureProfileStorage(profile) {
     const baseConfig = veveyConfig || legacyConfig || null;
     const cfg = makeDefaultConfig(profile, baseConfig);
     await fs.writeFile(paths.configPath, JSON.stringify(cfg, null, 2));
+  }
+
+  const existingTracker = await readJsonSafe(paths.trackerPath, null);
+  if (existingTracker) {
+    const { tracker, changed } = migrateTracker(existingTracker);
+    if (changed) {
+      await writeJsonAtomic(paths.trackerPath, tracker);
+    }
   }
 
   return paths;
@@ -403,7 +418,10 @@ const server = http.createServer(async (req, res) => {
       await fs.mkdir(profileDir, { recursive: true });
       const cfg = buildConfigFromPayload(payload);
       await fs.writeFile(path.join(profileDir, 'watch-config.json'), JSON.stringify(cfg, null, 2));
-      await fs.writeFile(path.join(profileDir, 'tracker.json'), JSON.stringify({ listings: [], statuses: ['À contacter', 'Visite', 'Dossier', 'Relance', 'Accepté', 'Refusé', 'Sans réponse'], updatedAt: new Date().toISOString() }, null, 2));
+      await writeJsonAtomic(
+        path.join(profileDir, 'tracker.json'),
+        { schemaVersion: TRACKER_SCHEMA_VERSION, listings: [], updatedAt: new Date().toISOString() }
+      );
       return sendJson(res, 201, { ok: true, slug });
     } catch (err) {
       return sendJson(res, 400, { ok: false, error: err.message });
