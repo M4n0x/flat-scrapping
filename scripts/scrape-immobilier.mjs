@@ -9,6 +9,7 @@ import {
   isBudgetEligible,
   isSizeEligible
 } from './listing-filters.mjs';
+import { migrateStatus, DEFAULT_STATUS } from './status.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -529,17 +530,6 @@ function isExcludedType(item, config) {
   return keywords.some((k) => text.includes(String(k).toLowerCase()));
 }
 
-function normalizeStatus(status = '') {
-  const s = String(status || '').trim();
-
-  if (!s || s === 'À contacter') return 'À contacter';
-  if (['Visite', 'Visite demandée', 'Visite planifiée', 'Visité'].includes(s)) return 'Visite';
-  if (['Dossier', 'Dossier prêt à envoyer', 'Dossier envoyé'].includes(s)) return 'Dossier';
-  if (['Relance', 'Relance J+2'].includes(s)) return 'Relance';
-  if (['Accepté', 'Refusé', 'Sans réponse'].includes(s)) return s;
-
-  return 'À contacter';
-}
 
 function normalizeDateParts(day, month, year) {
   const d = Number(day);
@@ -2853,7 +2843,7 @@ async function main() {
         mapLon: item.mapLon ?? existing.mapLon ?? null,
         mapAddress: item.mapAddress || existing.mapAddress || '',
         publishedAt: item.publishedAt || existing.publishedAt || null,
-        status: normalizeStatus(existing.status || 'À contacter'),
+        status: (migrateStatus(existing.status) || DEFAULT_STATUS),
         notes: mergeNotesWithEntryDate(existing.notes || '', entryDateText),
         firstSeenAt: existing.firstSeenAt || now,
         active: true,
@@ -2912,7 +2902,7 @@ async function main() {
       if (outOfScopeListing) {
         merged.push({
           ...old,
-          status: normalizeStatus(old.status),
+          status: (migrateStatus(old.status) || DEFAULT_STATUS),
           active: false,
           removedAt: old.removedAt || null,
           missingCount: nextMissing,
@@ -3064,7 +3054,7 @@ async function main() {
         mapLon: old.mapLon ?? null,
         mapAddress: old.mapAddress || '',
         distanceFromWorkAddress: old.distanceFromWorkAddress || workAddress,
-        status: shouldRemove ? 'archived' : normalizeStatus(old.status),
+        status: shouldRemove ? 'archived' : (migrateStatus(old.status) || DEFAULT_STATUS),
         active: !shouldRemove,
         removedAt: shouldRemove ? old.removedAt || now : null,
         missingCount: nextMissing,
