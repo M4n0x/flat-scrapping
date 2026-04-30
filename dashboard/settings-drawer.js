@@ -242,7 +242,9 @@ async function renderList() {
 
     const chev = document.createElement('span');
     chev.className = 'chevron';
-    chev.textContent = '›';
+    const chevIcon = document.createElement('i');
+    chevIcon.className = 'fa-solid fa-chevron-right';
+    chev.appendChild(chevIcon);
 
     row.append(dot, name, meta, chev);
     row.addEventListener('click', () => renderEditor(row.dataset.slug));
@@ -270,7 +272,9 @@ async function renderEditor(slug) {
   const back = document.createElement('button');
   back.type = 'button';
   back.className = 'editor-back btn btn-ghost btn-sm';
-  back.textContent = '← Retour';
+  const backIcon = document.createElement('i');
+  backIcon.className = 'fa-solid fa-arrow-left';
+  back.append(backIcon, document.createTextNode(' Retour'));
   back.addEventListener('click', renderList);
   body.appendChild(back);
 
@@ -351,7 +355,9 @@ async function renderEditor(slug) {
       removeBtn.type = 'button';
       removeBtn.className = 'remove-zone';
       removeBtn.title = 'Retirer';
-      removeBtn.textContent = '×';
+      const removeIcon = document.createElement('i');
+      removeIcon.className = 'fa-solid fa-xmark';
+      removeBtn.appendChild(removeIcon);
       const zSlug = z.slug;
       removeBtn.addEventListener('click', () => {
         editorZones = editorZones.filter((x) => x.slug !== zSlug);

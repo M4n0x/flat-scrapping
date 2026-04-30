@@ -36,7 +36,9 @@ export function renderSidebar({ profiles, sources }, state, onChange) {
     const visible = !state.hiddenProfiles.has(profile.slug);
     if (!visible) eye.classList.add('off');
     eye.setAttribute('aria-label', visible ? 'Masquer' : 'Afficher');
-    eye.textContent = visible ? '👁' : '🚫';
+    const icon = document.createElement('i');
+    icon.className = visible ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+    eye.replaceChildren(icon);
     eye.addEventListener('click', () => {
       emit((next) => {
         const set = new Set(next.hiddenProfiles);
