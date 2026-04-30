@@ -22,14 +22,19 @@
     <link rel="stylesheet" href="/dashboard/styles.css" />
   </head>
   <body class="app-body">
-    <header class="app-topbar">
-      <a href="/" class="brand"><span class="brand-dot"></span>Apartment Ops</a>
-      <span class="grow"></span>
-      <span id="scan-status" class="scan-status hidden"></span>
-      <button id="scan-button" class="btn btn-primary btn-sm" type="button">Scanner</button>
-    </header>
-
     <div class="app-shell">
+
+      <main id="map-container" class="app-map" aria-label="Carte des annonces">
+        <div id="map" class="map-canvas"></div>
+      </main>
+
+      <header class="app-topbar">
+        <a href="/" class="brand"><span class="brand-dot"></span>Apartment Ops</a>
+        <span class="grow"></span>
+        <span id="scan-status" class="scan-status hidden"></span>
+        <button id="scan-button" class="btn btn-primary btn-sm" type="button"><i class="fa-solid fa-satellite-dish"></i> Scanner</button>
+      </header>
+
       <aside id="sidebar" class="app-sidebar" aria-label="Filtres">
         <section class="sidebar-section" data-section="profiles">
           <header class="sidebar-section-head">Profils</header>
@@ -75,18 +80,15 @@
         </section>
 
         <footer class="sidebar-foot">
-          <button id="settings-button" class="btn btn-ghost btn-sm" type="button">Paramètres</button>
+          <button id="settings-button" class="btn btn-ghost btn-sm" type="button"><i class="fa-solid fa-gear"></i> Paramètres</button>
         </footer>
       </aside>
 
-      <main id="map-container" class="app-map" aria-label="Carte des annonces">
-        <div id="map" class="map-canvas"></div>
-        <div id="scan-progress" class="scan-progress hidden" role="status" aria-live="polite">
-          <div class="scan-progress-source"></div>
-          <div class="scan-progress-counter"></div>
-          <div class="scan-progress-bar"></div>
-        </div>
-      </main>
+      <div id="scan-progress" class="scan-progress hidden" role="status" aria-live="polite">
+        <div class="scan-progress-source"></div>
+        <div class="scan-progress-counter"></div>
+        <div class="scan-progress-bar"></div>
+      </div>
 
       <aside id="listings-panel" class="app-listings" aria-label="Annonces">
         <header class="listings-head">
@@ -94,6 +96,7 @@
         </header>
         <div id="listings-rows" class="listings-rows"></div>
       </aside>
+
     </div>
 
     <div id="settings-drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-labelledby="settings-drawer-title">
@@ -101,7 +104,7 @@
       <div class="drawer-panel">
         <header class="drawer-head">
           <h2 id="settings-drawer-title">Profils</h2>
-          <button class="drawer-close" type="button" data-drawer-close aria-label="Fermer">×</button>
+          <button class="drawer-close" type="button" data-drawer-close aria-label="Fermer"><i class="fa-solid fa-xmark"></i></button>
         </header>
         <div id="drawer-body" class="drawer-body"></div>
       </div>
