@@ -942,7 +942,7 @@ function renderScanProgress(job, profileNames) {
 
   scanAllProgress.innerHTML = `
     <div class="progress-header">
-      <span>${isDone ? '✅ Scan terminé' : `⏳ Scan en cours… ${job.done}/${job.total}`}</span>
+      <span>${isDone ? 'Scan terminé' : `Scan en cours… ${job.done}/${job.total}`}</span>
       <span>${pct}%</span>
     </div>
     <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
@@ -953,7 +953,7 @@ function renderScanProgress(job, profileNames) {
 function pollScanJob(jobId) {
   scanAllProgress.classList.remove('hidden');
   scanAllBtn.disabled = true;
-  scanAllBtn.textContent = '⏳ Scan en cours…';
+  scanAllBtn.textContent = 'Scan en cours…';
 
   const profileNames = allProfiles.reduce((m, p) => { m[p.slug] = p.shortTitle || p.slug; return m; }, {});
 
@@ -965,7 +965,7 @@ function pollScanJob(jobId) {
         clearInterval(poll);
         localStorage.removeItem(STORAGE_KEY);
         scanAllBtn.disabled = false;
-        scanAllBtn.textContent = '🔄 Tout scanner';
+        scanAllBtn.textContent = 'Tout scanner';
         return;
       }
       renderScanProgress(job, profileNames);
@@ -973,7 +973,7 @@ function pollScanJob(jobId) {
         clearInterval(poll);
         localStorage.removeItem(STORAGE_KEY);
         scanAllBtn.disabled = false;
-        scanAllBtn.textContent = '🔄 Tout scanner';
+        scanAllBtn.textContent = 'Tout scanner';
         await loadProfiles();
         if (mapLoaded) await loadMapData();
       }
@@ -981,14 +981,14 @@ function pollScanJob(jobId) {
       clearInterval(poll);
       localStorage.removeItem(STORAGE_KEY);
       scanAllBtn.disabled = false;
-      scanAllBtn.textContent = '🔄 Tout scanner';
+      scanAllBtn.textContent = 'Tout scanner';
     }
   }, 2000);
 }
 
 scanAllBtn.addEventListener('click', async () => {
   scanAllBtn.disabled = true;
-  scanAllBtn.textContent = '⏳ Lancement…';
+  scanAllBtn.textContent = 'Lancement…';
 
   try {
     const res = await fetch('/api/run-scan-all', { method: 'POST' });
@@ -1002,7 +1002,7 @@ scanAllBtn.addEventListener('click', async () => {
   } catch (err) {
     alert(`Erreur: ${err.message}`);
     scanAllBtn.disabled = false;
-    scanAllBtn.textContent = '🔄 Tout scanner';
+    scanAllBtn.textContent = 'Tout scanner';
   }
 });
 

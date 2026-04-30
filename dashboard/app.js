@@ -58,7 +58,7 @@ async function loadProfileSwitcher() {
     // Add "manage" option at the end
     const manageOpt = document.createElement('option');
     manageOpt.value = '__manage__';
-    manageOpt.textContent = '⚙ Gérer les profils…';
+    manageOpt.textContent = 'Gérer les profils…';
     profileSwitcherEl.appendChild(manageOpt);
 
     profileSwitcherEl.addEventListener('change', () => {
@@ -213,8 +213,8 @@ function createTravelCell(item) {
   const lines = document.createElement('div');
   lines.className = 'travel-lines';
   lines.innerHTML = `
-    <span>🚗 ${travelMinutesLabel(item, 'drive')}</span>
-    <span>🚌 ${travelMinutesLabel(item, 'transit')}</span>
+    <span>Voiture: ${travelMinutesLabel(item, 'drive')}</span>
+    <span>Transports: ${travelMinutesLabel(item, 'transit')}</span>
   `;
 
   wrap.appendChild(lines);
@@ -222,7 +222,7 @@ function createTravelCell(item) {
 }
 
 function travelInlineLabel(item) {
-  return `Travail: ${distanceLabel(item)} · 🚗 ${travelMinutesLabel(item, 'drive')} · 🚌 ${travelMinutesLabel(item, 'transit')}`;
+  return `Travail: ${distanceLabel(item)} · Voiture ${travelMinutesLabel(item, 'drive')} · Transports ${travelMinutesLabel(item, 'transit')}`;
 }
 
 function renderKpis(stats) {
