@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { buildMapListingsPayload } from './map-listings.mjs';
 import { migrateTracker, TRACKER_SCHEMA_VERSION } from './tracker-migration.mjs';
 import { isValidStatus } from './status.mjs';
+import { applyViewedAt } from './mark-viewed.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -492,6 +493,26 @@ const server = http.createServer(async (req, res) => {
     const areas = (config?.areas || []).map((a) => a?.label).filter(Boolean).join(' · ');
 
     return sendJson(res, 200, { profile, tracker, latest, areas });
+  }
+
+  if (req.method === 'POST' && u.pathname === '/api/mark-viewed') {
+    const profile = getProfileFromRequest(u);
+
+    try {
+      await ensureProfileStorage(profile);
+      const raw = await readBody(req);
+      const body = JSON.parse(raw || '{}');
+      const ids = Array.isArray(body.ids) ? body.ids : [];
+
+      const trackerPath = path.join(PROFILES_DATA_DIR, profile, 'tracker.json');
+      const tracker = await readJsonSafe(trackerPath, { schemaVersion: TRACKER_SCHEMA_VERSION, listings: [] });
+      const { tracker: next, updated } = applyViewedAt(tracker, ids, new Date().toISOString());
+      if (updated > 0) await writeJsonAtomic(trackerPath, next);
+
+      return sendJson(res, 200, { ok: true, updated });
+    } catch (err) {
+      return sendJson(res, 400, { ok: false, error: err.message });
+    }
   }
 
   if (req.method === 'POST' && u.pathname === '/api/update-status') {
