@@ -108,15 +108,6 @@ let activeScoreTrigger = null;
 let scorePopoverGlobalBound = false;
 let activeCardFilter = 'all';
 
-const STATUS_LABELS = {
-  contact: 'À contacter',
-  visite: 'Visite',
-  dossier: 'Dossier',
-  relance: 'Relance',
-  accepte: 'Accepté',
-  refuse: 'Refusé',
-  aucune: '—'
-};
 const STATUS_KEY_BY_LABEL = {
   'À contacter': 'contact',
   'Visite': 'visite',
@@ -721,58 +712,6 @@ function setActiveView(view) {
 tabTableEl?.addEventListener('click', () => setActiveView('table'));
 tabKanbanEl?.addEventListener('click', () => setActiveView('kanban'));
 
-function createThumbCell(item) {
-  const urls = getImageUrls(item);
-  const holder = document.createElement('div');
-  holder.className = 'thumb-stack';
-
-  if (!urls.length) {
-    const placeholder = document.createElement('div');
-    placeholder.className = 'thumb placeholder';
-    placeholder.textContent = 'n/a';
-    holder.appendChild(placeholder);
-    return holder;
-  }
-
-  const img = document.createElement('img');
-  img.className = 'thumb';
-  img.src = urls[0];
-  img.loading = 'lazy';
-  img.alt = `Aperçu ${item.objectType || item.title || 'annonce'}`;
-  img.style.cursor = 'pointer';
-  img.addEventListener('click', () => lightbox.show(urls, 0));
-  holder.appendChild(img);
-
-  if (urls.length > 1) {
-    const strip = document.createElement('div');
-    strip.className = 'thumb-strip';
-
-    urls.slice(1, 4).forEach((src, i) => {
-      const mini = document.createElement('img');
-      mini.className = 'thumb-mini';
-      mini.src = src;
-      mini.loading = 'lazy';
-      mini.alt = 'miniature';
-      mini.style.cursor = 'pointer';
-      mini.addEventListener('click', () => lightbox.show(urls, i + 1));
-      strip.appendChild(mini);
-    });
-
-    if (urls.length > 4) {
-      const more = document.createElement('span');
-      more.className = 'thumb-more';
-      more.textContent = `+${urls.length - 4}`;
-      more.style.cursor = 'pointer';
-      more.addEventListener('click', () => lightbox.show(urls, 4));
-      strip.appendChild(more);
-    }
-
-    holder.appendChild(strip);
-  }
-
-  return holder;
-}
-
 function isRefused(item) {
   return !item.isRemoved && (item.status || '') === 'Refusé';
 }
@@ -930,7 +869,7 @@ function renderKanban(listings) {
       }
 
       const actions = document.createElement('div');
-      actions.className = 'k-actions';
+      actions.className = 'actions';
       actions.addEventListener('dragstart', (event) => event.preventDefault());
 
       if (!item.isRemoved) {
