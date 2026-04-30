@@ -641,10 +641,8 @@
 }
 
 /* ---------- Table row modifiers ---------- */
-tr.row-new td:first-child {
-  border-left: 3px solid var(--accent);
-}
-
+/* New / pinned rows are already signaled by the .pri-bar in the first cell
+   and inline badges; no extra left border to avoid a double-line. */
 tr.row-removed td {
   opacity: 0.6;
   background: var(--danger-soft);
@@ -657,8 +655,4 @@ tr.row-refused td {
 
 tr.row-pinned {
   background: var(--warning-soft) !important;
-}
-
-tr.row-pinned td:first-child {
-  border-left: 3px solid var(--warning);
 }

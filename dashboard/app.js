@@ -626,6 +626,7 @@ function applyFilterAndSort(items) {
 
 function createStatusSelect(item) {
   const select = document.createElement('select');
+  select.className = 'select-trigger';
   for (const st of statuses) {
     const opt = document.createElement('option');
     opt.value = st;
