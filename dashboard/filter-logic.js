@@ -9,14 +9,12 @@ export function defaultFilterState() {
   };
 }
 
-// Windows are (N+1)*24 h so that "last Nd" includes the boundary day.
-// e.g. '3d' keeps items seen up to 4×24 h ago (strictly greater excluded).
 const RECENT_TO_MS = {
-  any:  null,
-  '1d':  2 * 24 * 60 * 60 * 1000,
-  '3d':  4 * 24 * 60 * 60 * 1000,
-  '7d':  8 * 24 * 60 * 60 * 1000,
-  '14d': 15 * 24 * 60 * 60 * 1000
+  any: null,
+  '1d': 24 * 60 * 60 * 1000,
+  '3d': 3 * 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '14d': 14 * 24 * 60 * 60 * 1000
 };
 
 export function applyFilters(listings, state, nowMs = Date.now()) {

@@ -9,7 +9,7 @@ const fixture = [
   { id: 'a', profileSlug: 'p1', status: 'sorting',  priority: 'A',  source: 'flatfox.ch',     firstSeenAt: '2026-04-29T12:00:00.000Z', viewedAt: null },
   { id: 'b', profileSlug: 'p1', status: 'pursuing', priority: 'A-', source: 'flatfox.ch',     firstSeenAt: '2026-04-15T00:00:00.000Z', viewedAt: '2026-04-25T08:00:00.000Z' },
   { id: 'c', profileSlug: 'p2', status: 'archived', priority: 'B',  source: 'naef.ch',        firstSeenAt: '2026-03-10T00:00:00.000Z', viewedAt: null },
-  { id: 'd', profileSlug: 'p2', status: 'sorting',  priority: 'A',  source: 'immobilier.ch',  firstSeenAt: '2026-04-26T12:00:00.000Z', viewedAt: null }
+  { id: 'd', profileSlug: 'p2', status: 'sorting',  priority: 'A',  source: 'immobilier.ch',  firstSeenAt: '2026-04-28T00:00:00.000Z', viewedAt: null }
 ];
 
 test('default state shows sorting+pursuing items, hides archived; all profiles, priorities, sources', () => {
