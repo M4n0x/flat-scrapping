@@ -54,14 +54,36 @@ function httpsGet(url) {
   });
 }
 
+function toFiniteCoordinate(value) {
+  if (value == null) return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toFinitePoint(value) {
+  const lat = toFiniteCoordinate(value?.lat);
+  const lon = toFiniteCoordinate(value?.lon);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
 async function geocodeAddress(query, cache) {
   const key = query.toLowerCase().trim();
-  if (cache[key]) return cache[key];
+  if (Object.prototype.hasOwnProperty.call(cache, key)) {
+    const point = toFinitePoint(cache[key]);
+    if (point) return point;
+    if (cache[key] === null) return null;
+  }
   
   const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
   const results = await httpsGet(url);
   if (results?.[0]) {
-    const point = { lat: parseFloat(results[0].lat), lon: parseFloat(results[0].lon) };
+    const point = toFinitePoint(results[0]);
+    if (!point) {
+      cache[key] = null;
+      return null;
+    }
     cache[key] = point;
     return point;
   }
@@ -139,6 +161,9 @@ async function main() {
     listing.distanceText = `${listing.distanceKm} km`;
     listing.distanceComputed = true;
     listing.distanceFromWorkAddress = workAddress;
+    listing.mapLat = listingCoords.lat;
+    listing.mapLon = listingCoords.lon;
+    listing.mapAddress = addr + ', Suisse';
     listing.driveMinutes = driveMinutes;
     listing.driveText = driveMinutes ? `${driveMinutes} min` : '';
     listing.transitMinutes = transitMinutes;

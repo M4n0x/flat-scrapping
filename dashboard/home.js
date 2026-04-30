@@ -1,3 +1,5 @@
+import { formatMarkerDetails, popupHtml } from './map-utils.js';
+
 const gridEl = document.getElementById('profiles-grid');
 const createSection = document.getElementById('create-section');
 const formEl = document.getElementById('profile-form');
@@ -12,11 +14,38 @@ const workplaceEl = document.getElementById('f-workplace');
 const workplaceSuggestionsEl = document.getElementById('workplace-suggestions');
 const pearlEnabledEl = document.getElementById('f-pearl-enabled');
 const pearlOptionsEl = document.getElementById('pearl-options');
+const homeTabProfilesEl = document.getElementById('home-tab-profiles');
+const homeTabMapEl = document.getElementById('home-tab-map');
+const homePanelProfilesEl = document.getElementById('home-panel-profiles');
+const homePanelMapEl = document.getElementById('home-panel-map');
+const mapRefreshBtn = document.getElementById('map-refresh');
+const mapProfileFiltersEl = document.getElementById('map-profile-filters');
+const mapStatusEl = document.getElementById('map-status');
+const mapEmptyEl = document.getElementById('map-empty');
+const mapModePointsEl = document.getElementById('map-mode-points');
+const mapModeDetailsEl = document.getElementById('map-mode-details');
+
+const HOME_VIEW_STORAGE_KEY = 'apartment-home:view';
+const MAP_MODE_STORAGE_KEY = 'apartment-map:mode';
+const MAP_VISIBLE_PROFILES_KEY = 'apartment-map:visible-profiles';
+const MAP_KNOWN_PROFILES_KEY = 'apartment-map:known-profiles';
+const LEAFLET_JS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+const LEAFLET_RETRY_SCRIPT_ID = 'leaflet-retry-script';
+const LEAFLET_RETRY_CSS_ID = 'leaflet-retry-css';
 
 let zones = [];
 let allProfiles = [];
 let suggestAbort = null;
 let activeIndex = -1;
+let mapInstance = null;
+let mapLayer = null;
+let mapPayload = null;
+let mapLoaded = false;
+let mapMode = localStorage.getItem(MAP_MODE_STORAGE_KEY) === 'details' ? 'details' : 'points';
+let visibleProfileSlugs = new Set();
+let leafletAssetPromise = null;
+let leafletCssPromise = null;
 
 // --- Canton mapping ---
 
@@ -263,6 +292,23 @@ function hideForm() {
   zoneSuggestionsEl.classList.add('hidden');
 }
 
+function setHomeView(view, persist = true) {
+  const mapActive = view === 'map';
+  homeTabProfilesEl?.classList.toggle('active', !mapActive);
+  homeTabMapEl?.classList.toggle('active', mapActive);
+  homePanelProfilesEl?.classList.toggle('active', !mapActive);
+  homePanelMapEl?.classList.toggle('active', mapActive);
+
+  if (persist) localStorage.setItem(HOME_VIEW_STORAGE_KEY, mapActive ? 'map' : 'profiles');
+  if (mapActive) {
+    ensureMapLoaded();
+    setTimeout(() => mapInstance?.invalidateSize(), 0);
+  }
+}
+
+homeTabProfilesEl?.addEventListener('click', () => setHomeView('profiles'));
+homeTabMapEl?.addEventListener('click', () => setHomeView('map'));
+
 formCancelEl.addEventListener('click', hideForm);
 
 formEl.addEventListener('submit', async (e) => {
@@ -328,6 +374,7 @@ formEl.addEventListener('submit', async (e) => {
     if (!data.ok) throw new Error(data.error || 'Erreur inconnue');
     hideForm();
     await loadProfiles();
+    await refreshMapIfLoaded();
   } catch (err) {
     alert(`Erreur: ${err.message}`);
   } finally {
@@ -414,6 +461,7 @@ async function confirmDelete(btn) {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
     await loadProfiles();
+    await refreshMapIfLoaded();
   } catch (err) {
     alert(`Erreur: ${err.message}`);
     btn.disabled = false;
@@ -432,6 +480,341 @@ async function loadProfiles() {
     gridEl.innerHTML = '<p style="color:var(--danger)">Impossible de charger les profils.</p>';
   }
 }
+
+function loadVisibleProfileSlugs(profiles) {
+  const currentSlugs = profiles.map((p) => p.slug);
+  const currentSet = new Set(currentSlugs);
+  const saved = localStorage.getItem(MAP_VISIBLE_PROFILES_KEY);
+  if (!saved) {
+    localStorage.setItem(MAP_KNOWN_PROFILES_KEY, JSON.stringify(currentSlugs));
+    return new Set(currentSlugs);
+  }
+
+  try {
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed)) throw new Error('Invalid visible profile filters');
+
+    const savedSet = new Set(parsed.filter((slug) => currentSet.has(slug)));
+    let knownSlugs = [];
+    const savedKnown = localStorage.getItem(MAP_KNOWN_PROFILES_KEY);
+    if (savedKnown) {
+      const parsedKnown = JSON.parse(savedKnown);
+      if (Array.isArray(parsedKnown)) knownSlugs = parsedKnown;
+    } else if (mapPayload?.profiles) {
+      knownSlugs = mapPayload.profiles.map((p) => p.slug);
+    }
+
+    const knownSet = new Set(knownSlugs.length ? knownSlugs : currentSlugs);
+    for (const slug of currentSlugs) {
+      if (!knownSet.has(slug)) savedSet.add(slug);
+    }
+
+    const reconciled = currentSlugs.filter((slug) => savedSet.has(slug));
+    localStorage.setItem(MAP_VISIBLE_PROFILES_KEY, JSON.stringify(reconciled));
+    localStorage.setItem(MAP_KNOWN_PROFILES_KEY, JSON.stringify(currentSlugs));
+    return new Set(reconciled);
+  } catch {
+    localStorage.setItem(MAP_VISIBLE_PROFILES_KEY, JSON.stringify(currentSlugs));
+    localStorage.setItem(MAP_KNOWN_PROFILES_KEY, JSON.stringify(currentSlugs));
+    return new Set(currentSlugs);
+  }
+}
+
+function saveVisibleProfileSlugs() {
+  localStorage.setItem(MAP_VISIBLE_PROFILES_KEY, JSON.stringify([...visibleProfileSlugs]));
+}
+
+function setMapMode(nextMode) {
+  mapMode = nextMode === 'details' ? 'details' : 'points';
+  localStorage.setItem(MAP_MODE_STORAGE_KEY, mapMode);
+  mapModePointsEl?.classList.toggle('active', mapMode === 'points');
+  mapModeDetailsEl?.classList.toggle('active', mapMode === 'details');
+  renderMapMarkers(false);
+}
+
+function ensureLeaflet() {
+  return window.L && typeof window.L.map === 'function';
+}
+
+function hasLoadedLeafletCss() {
+  return [...document.querySelectorAll('link[rel~="stylesheet"]')].some((link) => {
+    const href = String(link.href || '').split('?')[0];
+    return href === LEAFLET_CSS_URL && Boolean(link.sheet);
+  });
+}
+
+function loadLeafletCss() {
+  if (hasLoadedLeafletCss()) return Promise.resolve();
+  if (leafletCssPromise) return leafletCssPromise;
+
+  leafletCssPromise = new Promise((resolve, reject) => {
+    document.getElementById(LEAFLET_RETRY_CSS_ID)?.remove();
+
+    const link = document.createElement('link');
+    link.id = LEAFLET_RETRY_CSS_ID;
+    link.rel = 'stylesheet';
+    link.href = `${LEAFLET_CSS_URL}?retry=${Date.now()}`;
+    link.crossOrigin = '';
+    link.onload = () => {
+      leafletCssPromise = null;
+      resolve();
+    };
+    link.onerror = () => {
+      leafletCssPromise = null;
+      link.remove();
+      reject(new Error('Impossible de charger les styles de la carte. Vérifiez la connexion réseau.'));
+    };
+    document.head.appendChild(link);
+  });
+
+  return leafletCssPromise;
+}
+
+function loadLeafletScript() {
+  if (ensureLeaflet()) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    document.getElementById(LEAFLET_RETRY_SCRIPT_ID)?.remove();
+
+    const script = document.createElement('script');
+    script.id = LEAFLET_RETRY_SCRIPT_ID;
+    script.src = `${LEAFLET_JS_URL}?retry=${Date.now()}`;
+    script.crossOrigin = '';
+    script.async = true;
+    script.onload = () => {
+      if (ensureLeaflet()) {
+        resolve();
+      } else {
+        reject(new Error('Leaflet indisponible après le chargement.'));
+      }
+    };
+    script.onerror = () => {
+      script.remove();
+      reject(new Error('Impossible de charger Leaflet. Vérifiez la connexion réseau.'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+function loadLeafletAssets() {
+  if (ensureLeaflet() && hasLoadedLeafletCss()) return Promise.resolve();
+  if (leafletAssetPromise) return leafletAssetPromise;
+
+  leafletAssetPromise = Promise.all([loadLeafletCss(), loadLeafletScript()])
+    .then(() => {
+      if (!ensureLeaflet()) {
+        throw new Error('Leaflet indisponible après le chargement.');
+      }
+    })
+    .finally(() => {
+      leafletAssetPromise = null;
+    });
+
+  return leafletAssetPromise;
+}
+
+function renderMapRetryError(message) {
+  mapStatusEl.innerHTML = `${escapeHtml(message)} <button id="map-retry" class="save-inline" type="button">Réessayer</button>`;
+  document.getElementById('map-retry')?.addEventListener('click', loadMapData);
+}
+
+async function ensureMapInstance() {
+  if (mapInstance) return true;
+  try {
+    await loadLeafletAssets();
+  } catch (err) {
+    renderMapRetryError(err.message);
+    return false;
+  }
+
+  mapInstance = window.L.map('global-map', {
+    scrollWheelZoom: true
+  }).setView([46.8, 8.2], 8);
+
+  window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(mapInstance);
+
+  mapLayer = window.L.layerGroup().addTo(mapInstance);
+  return true;
+}
+
+function createMapIcon(item) {
+  const color = item.profileColor || '#56d4b8';
+  if (mapMode === 'details') {
+    const html = `<div class="map-detail-marker" style="background:${escapeHtml(color)}">${escapeHtml(formatMarkerDetails(item))}</div>`;
+    return window.L.divIcon({
+      className: 'map-marker-wrap',
+      html,
+      iconSize: null,
+      iconAnchor: [18, 16],
+      popupAnchor: [0, -14]
+    });
+  }
+
+  return window.L.divIcon({
+    className: 'map-marker-wrap',
+    html: `<div class="map-dot-marker" style="background:${escapeHtml(color)}"></div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -9]
+  });
+}
+
+function renderMapFilters() {
+  if (!mapPayload) return;
+  mapProfileFiltersEl.innerHTML = '';
+
+  for (const profile of mapPayload.profiles) {
+    const label = document.createElement('label');
+    label.className = 'map-profile-filter';
+    label.innerHTML = `
+      <input type="checkbox" value="${escapeHtml(profile.slug)}" ${visibleProfileSlugs.has(profile.slug) ? 'checked' : ''} />
+      <span class="map-profile-swatch" style="background:${escapeHtml(profile.color)}"></span>
+      <span>${escapeHtml(profile.title)}</span>
+      <span class="map-profile-count">${profile.mappedCount}/${profile.totalActiveDisplayed}</span>
+    `;
+
+    label.querySelector('input').addEventListener('change', (event) => {
+      if (event.currentTarget.checked) visibleProfileSlugs.add(profile.slug);
+      else visibleProfileSlugs.delete(profile.slug);
+      saveVisibleProfileSlugs();
+      renderMapMarkers(true);
+    });
+
+    mapProfileFiltersEl.appendChild(label);
+  }
+}
+
+function renderMapMarkers(fitBounds = true) {
+  if (!mapPayload || !mapInstance) return false;
+
+  mapLayer.clearLayers();
+  const visible = mapPayload.listings.filter((item) => visibleProfileSlugs.has(item.profileSlug));
+  const bounds = [];
+
+  for (const item of visible) {
+    const marker = window.L.marker([item.lat, item.lon], { icon: createMapIcon(item) });
+    marker.bindPopup(popupHtml(item), {
+      className: 'global-map-popup',
+      closeButton: false,
+      maxWidth: 380,
+      minWidth: 260
+    });
+    marker.addTo(mapLayer);
+    bounds.push([item.lat, item.lon]);
+  }
+
+  const totalVisible = visible.length;
+  const missing = mapPayload.profiles
+    .filter((p) => visibleProfileSlugs.has(p.slug))
+    .reduce((sum, p) => sum + Number(p.missingCoordinates || 0), 0);
+
+  mapStatusEl.textContent = `${totalVisible} annonces visibles sur la carte · ${missing} sans coordonnées`;
+
+  if (mapEmptyEl) {
+    if (!totalVisible) {
+      mapEmptyEl.textContent = mapPayload.totals.activeDisplayed > 0
+        ? 'Aucune annonce avec coordonnées pour les profils sélectionnés. Les coordonnées seront complétées après le prochain scan ou recalcul des distances.'
+        : 'Aucune annonce active à afficher.';
+      mapEmptyEl.classList.remove('hidden');
+    } else {
+      mapEmptyEl.classList.add('hidden');
+    }
+  }
+
+  if (fitBounds && bounds.length) {
+    mapInstance.fitBounds(bounds, { padding: [28, 28], maxZoom: 14 });
+  }
+
+  return true;
+}
+
+function setPopupCarouselIndex(carousel, nextIndex) {
+  const slides = [...carousel.querySelectorAll('[data-carousel-slide]')];
+  if (!slides.length) return;
+
+  const index = ((nextIndex % slides.length) + slides.length) % slides.length;
+  const activeSlide = slides[index];
+  const image = carousel.querySelector('[data-carousel-current]');
+  const counter = carousel.querySelector('[data-carousel-count]');
+  const src = activeSlide.dataset.carouselUrl || '';
+
+  carousel.dataset.carouselIndex = String(index);
+  if (image && src) {
+    image.src = src;
+    image.alt = `Photo ${index + 1}`;
+  }
+  if (counter) {
+    counter.textContent = `${index + 1} / ${slides.length}`;
+  }
+}
+
+function handleMapCarouselClick(event) {
+  const control = event.target.closest('[data-popup-close], [data-carousel-prev], [data-carousel-next]');
+  if (!control) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  if (control.matches('[data-popup-close]')) {
+    mapInstance?.closePopup();
+    return;
+  }
+
+  const carousel = control.closest('.map-popup-carousel');
+  if (!carousel) return;
+
+  const current = Number(carousel.dataset.carouselIndex || 0);
+  if (control.matches('[data-carousel-prev]')) {
+    setPopupCarouselIndex(carousel, current - 1);
+  } else {
+    setPopupCarouselIndex(carousel, current + 1);
+  }
+}
+
+function handleMapPopupKeydown(event) {
+  if (event.key === 'Escape') {
+    mapInstance?.closePopup();
+  }
+}
+
+async function loadMapData() {
+  if (!mapStatusEl) return;
+  mapStatusEl.textContent = 'Chargement de la carte…';
+  try {
+    const res = await fetch('/api/map-listings');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const nextPayload = await res.json();
+    visibleProfileSlugs = loadVisibleProfileSlugs(nextPayload.profiles || []);
+    mapPayload = nextPayload;
+    renderMapFilters();
+    if (!(await ensureMapInstance())) return;
+    mapLoaded = renderMapMarkers(true);
+  } catch (err) {
+    renderMapRetryError(`Erreur carte: ${err.message}`);
+  }
+}
+
+async function refreshMapIfLoaded() {
+  if (mapLoaded) await loadMapData();
+}
+
+function ensureMapLoaded() {
+  if (mapLoaded) {
+    setTimeout(() => mapInstance?.invalidateSize(), 0);
+    return;
+  }
+  loadMapData();
+}
+
+mapRefreshBtn?.addEventListener('click', loadMapData);
+mapModePointsEl?.addEventListener('click', () => setMapMode('points'));
+mapModeDetailsEl?.addEventListener('click', () => setMapMode('details'));
+document.getElementById('global-map')?.addEventListener('click', handleMapCarouselClick);
+document.addEventListener('keydown', handleMapPopupKeydown);
+setMapMode(mapMode);
 
 // --- Scan all ---
 
@@ -497,6 +880,7 @@ function pollScanJob(jobId) {
         scanAllBtn.disabled = false;
         scanAllBtn.textContent = '🔄 Tout scanner';
         await loadProfiles();
+        if (mapLoaded) await loadMapData();
       }
     } catch {
       clearInterval(poll);
@@ -545,4 +929,8 @@ async function resumeScanIfNeeded() {
   }
 }
 
-loadProfiles().then(() => resumeScanIfNeeded());
+loadProfiles().then(() => {
+  const savedHomeView = localStorage.getItem(HOME_VIEW_STORAGE_KEY);
+  setHomeView(savedHomeView === 'map' ? 'map' : 'profiles', false);
+  resumeScanIfNeeded();
+});

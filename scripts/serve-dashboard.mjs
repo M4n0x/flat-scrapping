@@ -3,6 +3,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildMapListingsPayload } from './map-listings.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -377,6 +378,11 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, { profiles });
   }
 
+  if (req.method === 'GET' && u.pathname === '/api/map-listings') {
+    const payload = await buildMapListingsPayload(PROFILES_DATA_DIR);
+    return sendJson(res, 200, payload);
+  }
+
   if (req.method === 'GET' && u.pathname === '/api/profile/detail') {
     const slug = sanitizeProfile(u.searchParams.get('profile') || '');
     const configPath = path.join(PROFILES_DATA_DIR, slug, 'watch-config.json');
@@ -593,7 +599,7 @@ const server = http.createServer(async (req, res) => {
     return serveFile(res, path.join(DASHBOARD_DIR, relative));
   }
 
-  const profileAssetMatch = u.pathname.match(/^\/([a-z0-9-]+)\/(app\.js|styles\.css)$/i);
+  const profileAssetMatch = u.pathname.match(/^\/([a-z0-9-]+)\/(app\.js|styles\.css|map-utils\.js)$/i);
   if (req.method === 'GET' && profileAssetMatch) {
     return serveFile(res, path.join(DASHBOARD_DIR, profileAssetMatch[2]));
   }

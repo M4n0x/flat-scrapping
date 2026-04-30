@@ -855,21 +855,31 @@ async function fetchTransitMinutes(workAddress, listingAddress, routeCache) {
 
 let lastGeocodeRequestAt = 0;
 
+function toFiniteCoordinate(value) {
+  if (value == null) return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function geocodeAddress(query, geocodeCache) {
   if (!query) return null;
 
   const key = query.toLowerCase();
   if (Object.prototype.hasOwnProperty.call(geocodeCache, key)) {
     const cached = geocodeCache[key];
-    if (cached && typeof cached === 'object' && Number.isFinite(Number(cached.lat)) && Number.isFinite(Number(cached.lon))) {
-      return { lat: Number(cached.lat), lon: Number(cached.lon) };
+    const lat = toFiniteCoordinate(cached?.lat);
+    const lon = toFiniteCoordinate(cached?.lon);
+    if (lat != null && lon != null) {
+      return { lat, lon };
     }
   }
 
   const parseLatLon = (latValue, lonValue) => {
-    const lat = Number(latValue);
-    const lon = Number(lonValue);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    const lat = toFiniteCoordinate(latValue);
+    const lon = toFiniteCoordinate(lonValue);
+    if (lat == null || lon == null) return null;
     return { lat, lon };
   };
 
@@ -938,6 +948,16 @@ async function computeDistanceFromWork(item, workCoords, geocodeCache) {
     listingAddress,
     listingCoords
   };
+}
+
+function applyMapCoordinatesFromDistance(item, distanceMeta) {
+  const lat = toFiniteCoordinate(distanceMeta?.listingCoords?.lat);
+  const lon = toFiniteCoordinate(distanceMeta?.listingCoords?.lon);
+  if (lat == null || lon == null) return;
+
+  item.mapLat = lat;
+  item.mapLon = lon;
+  item.mapAddress = distanceMeta.listingAddress || buildListingAddressQuery(item);
 }
 
 function mergeNotesWithEntryDate(notes = '', moveInDate = null) {
@@ -2858,6 +2878,7 @@ async function main() {
       item.distanceText = distanceMeta.distanceText;
       item.distanceComputed = distanceMeta.computed;
       item.distanceFromWorkAddress = workAddress;
+      applyMapCoordinatesFromDistance(item, distanceMeta);
 
       const driveMinutes = await fetchDrivingMinutes(workCoords, distanceMeta.listingCoords, routeCache);
       const transitMinutes = await fetchTransitMinutes(workAddress, distanceMeta.listingAddress, routeCache);
@@ -2927,6 +2948,9 @@ async function main() {
         driveText,
         transitMinutes,
         transitText,
+        mapLat: item.mapLat ?? existing.mapLat ?? null,
+        mapLon: item.mapLon ?? existing.mapLon ?? null,
+        mapAddress: item.mapAddress || existing.mapAddress || '',
         publishedAt: item.publishedAt || existing.publishedAt || null,
         status: normalizeStatus(existing.status || 'À contacter'),
         notes: mergeNotesWithEntryDate(existing.notes || '', entryDateText),
@@ -2948,6 +2972,9 @@ async function main() {
         driveText: toDurationMinutesOrNull(item.driveMinutes) != null ? `${Math.round(toDurationMinutesOrNull(item.driveMinutes))} min` : '',
         transitMinutes: toDurationMinutesOrNull(item.transitMinutes),
         transitText: toDurationMinutesOrNull(item.transitMinutes) != null ? `${Math.round(toDurationMinutesOrNull(item.transitMinutes))} min` : '',
+        mapLat: item.mapLat ?? null,
+        mapLon: item.mapLon ?? null,
+        mapAddress: item.mapAddress || '',
         publishedAt: item.publishedAt || null,
         status: 'À contacter',
         notes: mergeNotesWithEntryDate('', entryDateText),
@@ -3116,6 +3143,7 @@ async function main() {
         if (distanceMeta.computed) {
           distanceKm = distanceMeta.distanceKm;
           distanceText = distanceMeta.distanceText;
+          applyMapCoordinatesFromDistance(old, distanceMeta);
 
           if (driveMinutes == null) {
             driveMinutes = toDurationMinutesOrNull(await fetchDrivingMinutes(workCoords, distanceMeta.listingCoords, routeCache));
@@ -3136,6 +3164,9 @@ async function main() {
         driveText: driveMinutes != null ? `${Math.round(driveMinutes)} min` : sanitizeTravelText(old.driveText || ''),
         transitMinutes,
         transitText: transitMinutes != null ? `${Math.round(transitMinutes)} min` : sanitizeTravelText(old.transitText || ''),
+        mapLat: old.mapLat ?? null,
+        mapLon: old.mapLon ?? null,
+        mapAddress: old.mapAddress || '',
         distanceFromWorkAddress: old.distanceFromWorkAddress || workAddress,
         status: normalizeStatus(old.status),
         active: !shouldRemove,
