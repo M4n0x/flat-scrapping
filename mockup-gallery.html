@@ -1,0 +1,3297 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apartment Search · 5 Map-Centric Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=JetBrains+Mono:wght@400;600;700&family=Space+Mono:wght@400;700&family=IBM+Plex+Mono:wght@400;500;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Cormorant+Garamond:wght@400;500;700&family=Lora:wght@400;500;600&family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&family=Caveat:wght@500;700&family=DM+Serif+Display&family=Nunito:wght@400;600;700;800&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   GALLERY SHELL
+   ============================================================ */
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  font-family: 'Archivo', system-ui, sans-serif;
+  background: #0a0a0a;
+  color: #fff;
+  overflow-x: hidden;
+}
+
+.gallery-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.gallery-header {
+  padding: 18px 32px 14px;
+  background: linear-gradient(180deg, #0e0e10 0%, #16161a 100%);
+  border-bottom: 1px solid #2a2a32;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.gallery-title {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  color: #f4f4f5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gallery-title::before {
+  content: '';
+  width: 10px; height: 10px;
+  background: linear-gradient(135deg, #ff5e5e, #ffb84d);
+  border-radius: 2px;
+}
+.gallery-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #71717a;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gallery-controls {
+  padding: 22px 32px 18px;
+  background: #0e0e10;
+  border-bottom: 1px solid #2a2a32;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 24px;
+  align-items: center;
+}
+.concept-name {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #d4d4d8;
+}
+.concept-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-left: 8px;
+  padding: 3px 7px;
+  border: 1px solid #2a2a32;
+  border-radius: 3px;
+}
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 380px;
+}
+.arrow-btn {
+  background: #1c1c22;
+  border: 1px solid #2a2a32;
+  color: #d4d4d8;
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.arrow-btn:hover { background: #2a2a32; color: #fff; }
+.arrow-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 4px;
+  background: #2a2a32;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #f4f4f5;
+  border: 3px solid #0e0e10;
+  box-shadow: 0 0 0 1px #f4f4f5, 0 4px 10px rgba(0,0,0,0.5);
+  cursor: pointer;
+}
+.slider::-moz-range-thumb {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #f4f4f5;
+  border: 3px solid #0e0e10;
+  cursor: pointer;
+}
+
+.dots {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #2a2a32;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.dot.active {
+  background: #f4f4f5;
+  transform: scale(1.4);
+}
+
+.mockup-stage {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-height: 720px;
+}
+.mockup-panel {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  overflow: auto;
+}
+.mockup-panel.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.gallery-footer {
+  padding: 18px 32px;
+  background: #0e0e10;
+  border-top: 1px solid #2a2a32;
+  font-family: 'Archivo', sans-serif;
+  font-size: 13px;
+  color: #a1a1aa;
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.gallery-footer .desc-title { color: #f4f4f5; font-weight: 700; margin-right: 6px; }
+.kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  background: #1c1c22;
+  border: 1px solid #2a2a32;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: #d4d4d8;
+}
+
+/* ============================================================
+   MOCKUP 1: SWISS PRECISION
+   Clean grid, red/black/white, info-dense, Helvetica spirit
+   ============================================================ */
+.swiss {
+  font-family: 'Archivo', sans-serif;
+  background: #f4f4f1;
+  color: #0a0a0a;
+  display: grid;
+  grid-template-columns: 280px 1fr 340px;
+  grid-template-rows: 56px 1fr 44px;
+  height: 100%;
+  min-height: 720px;
+}
+.swiss-header {
+  grid-column: 1 / -1;
+  background: #0a0a0a;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 32px;
+  border-bottom: 3px solid #dc2626;
+}
+.swiss-logo {
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.swiss-logo .cross {
+  background: #dc2626;
+  width: 22px; height: 22px;
+  position: relative;
+}
+.swiss-logo .cross::before, .swiss-logo .cross::after {
+  content: '';
+  position: absolute;
+  background: #fff;
+}
+.swiss-logo .cross::before { left: 9px; top: 4px; width: 4px; height: 14px; }
+.swiss-logo .cross::after { left: 4px; top: 9px; width: 14px; height: 4px; }
+.swiss-nav {
+  display: flex;
+  gap: 0;
+  margin-left: auto;
+}
+.swiss-nav button {
+  background: transparent;
+  border: 0;
+  color: #a1a1aa;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.swiss-nav button.on { color: #fff; border-bottom-color: #dc2626; }
+.swiss-nav button:hover { color: #fff; }
+.swiss-profile-pill {
+  background: #1c1c22;
+  border: 1px solid #2a2a32;
+  padding: 6px 12px;
+  border-radius: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.swiss-profile-pill .dot {
+  width: 8px; height: 8px;
+  background: #dc2626;
+}
+
+.swiss-sidebar {
+  background: #fff;
+  border-right: 1px solid #d4d4d4;
+  padding: 20px;
+  overflow-y: auto;
+}
+.swiss-section { margin-bottom: 24px; }
+.swiss-section-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #71717a;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.swiss-section-label .count {
+  background: #0a0a0a;
+  color: #fff;
+  padding: 1px 6px;
+  font-weight: 600;
+}
+.swiss-range-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.swiss-input {
+  border: 1px solid #d4d4d4;
+  background: #f4f4f1;
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  width: 100%;
+  border-radius: 0;
+}
+.swiss-input:focus { outline: 2px solid #dc2626; outline-offset: -1px; border-color: transparent; }
+.swiss-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.swiss-chip {
+  background: #f4f4f1;
+  border: 1px solid #0a0a0a;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.swiss-chip:hover { background: #0a0a0a; color: #fff; }
+.swiss-chip.on { background: #dc2626; border-color: #dc2626; color: #fff; }
+.swiss-chip .x { font-size: 10px; opacity: 0.6; }
+.swiss-check-list { display: flex; flex-direction: column; gap: 7px; }
+.swiss-check {
+  display: flex; align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 0;
+}
+.swiss-check input { display: none; }
+.swiss-check .box {
+  width: 16px; height: 16px;
+  border: 1.5px solid #0a0a0a;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: #fff;
+}
+.swiss-check input:checked + .box {
+  background: #0a0a0a;
+}
+.swiss-check input:checked + .box::after {
+  content: '';
+  width: 8px; height: 4px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+.swiss-check .label { flex: 1; font-weight: 500; }
+.swiss-check .num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #71717a;
+}
+
+.swiss-map {
+  background: #e7e5e4;
+  position: relative;
+  overflow: hidden;
+}
+.swiss-map-controls {
+  position: absolute;
+  top: 16px; right: 16px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: #0a0a0a;
+  padding: 1px;
+}
+.swiss-map-btn {
+  background: #fff;
+  border: 0;
+  width: 36px; height: 36px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 14px;
+}
+.swiss-map-btn:hover { background: #dc2626; color: #fff; }
+.swiss-map-overlay {
+  position: absolute;
+  bottom: 16px; left: 16px;
+  background: #fff;
+  border: 1px solid #0a0a0a;
+  padding: 12px 14px;
+  z-index: 5;
+  font-size: 11px;
+  line-height: 1.6;
+  font-family: 'JetBrains Mono', monospace;
+}
+.swiss-map-overlay .big {
+  font-family: 'Archivo', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  display: block;
+  line-height: 1;
+}
+.swiss-map-overlay .label {
+  color: #71717a;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.swiss-map svg { width: 100%; height: 100%; display: block; }
+
+.swiss-listings {
+  background: #fff;
+  border-left: 1px solid #d4d4d4;
+  overflow-y: auto;
+}
+.swiss-listings-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid #d4d4d4;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f4f4f1;
+  position: sticky; top: 0;
+  z-index: 2;
+}
+.swiss-listings-head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.swiss-sort-btn {
+  background: transparent;
+  border: 1px solid #0a0a0a;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+}
+.swiss-listing {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e7e5e4;
+  cursor: pointer;
+  transition: background 0.1s;
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 12px;
+}
+.swiss-listing:hover { background: #f4f4f1; }
+.swiss-listing.featured { border-left: 3px solid #dc2626; padding-left: 13px; }
+.swiss-listing-img {
+  background: linear-gradient(135deg, #d4d4d4, #a8a29e);
+  aspect-ratio: 1;
+  position: relative;
+  overflow: hidden;
+}
+.swiss-listing-img::after {
+  content: attr(data-num);
+  position: absolute;
+  top: 4px; left: 4px;
+  background: #0a0a0a;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  padding: 1px 5px;
+  font-weight: 600;
+}
+.swiss-listing-meta { min-width: 0; }
+.swiss-listing-meta .price {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 14px;
+  display: block;
+}
+.swiss-listing-meta .title {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.swiss-listing-meta .addr {
+  font-size: 11px;
+  color: #71717a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.swiss-listing-meta .specs {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #71717a;
+  margin-top: 4px;
+  display: flex;
+  gap: 8px;
+}
+.swiss-listing-meta .badge {
+  display: inline-block;
+  background: #dc2626;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  margin-top: 4px;
+  letter-spacing: 0.04em;
+}
+
+.swiss-statusbar {
+  grid-column: 1 / -1;
+  background: #0a0a0a;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  letter-spacing: 0.04em;
+}
+.swiss-statusbar span { color: #a1a1aa; }
+.swiss-statusbar strong { color: #fff; font-weight: 700; }
+.swiss-statusbar .scan-btn {
+  margin-left: auto;
+  background: #dc2626;
+  border: 0;
+  color: #fff;
+  padding: 6px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+.swiss-statusbar .scan-btn:hover { background: #fff; color: #0a0a0a; }
+
+.swiss-marker { cursor: pointer; transition: all 0.15s; }
+.swiss-marker:hover { transform: scale(1.3); }
+
+/* ============================================================
+   MOCKUP 2: BRUTALIST RAW
+   ============================================================ */
+.brutal {
+  font-family: 'Space Mono', monospace;
+  background: #000;
+  color: #fff;
+  position: relative;
+  height: 100%;
+  min-height: 720px;
+  overflow: hidden;
+}
+.brutal-map {
+  position: absolute;
+  inset: 0;
+  background: #1a1a1a;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.brutal-map svg { width: 100%; height: 100%; }
+.brutal-noise {
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 3px 3px;
+  pointer-events: none;
+}
+
+.brutal-header {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 10;
+  background: #fff;
+  color: #000;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 4px solid #000;
+}
+.brutal-header h1 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.brutal-header h1::after {
+  content: ' / V2.0.4';
+  color: #999;
+}
+.brutal-header nav { display: flex; gap: 0; }
+.brutal-header nav a {
+  color: #000;
+  text-decoration: none;
+  padding: 4px 12px;
+  border-right: 2px solid #000;
+  cursor: pointer;
+}
+.brutal-header nav a:first-child { border-left: 2px solid #000; }
+.brutal-header nav a.on { background: #000; color: #fff; }
+.brutal-header nav a:hover { background: #000; color: #fff; }
+.brutal-header .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.brutal-header .ts { color: #666; }
+.brutal-header .scan {
+  background: #000;
+  color: #fff;
+  border: 0;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.brutal-header .scan:hover { background: #fff; color: #000; outline: 2px solid #000; }
+
+.brutal-filters {
+  position: absolute;
+  top: 70px;
+  left: 24px;
+  z-index: 10;
+  width: 280px;
+  background: #fff;
+  color: #000;
+  border: 3px solid #000;
+  padding: 0;
+}
+.brutal-filters h3 {
+  margin: 0;
+  padding: 8px 14px;
+  background: #000;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: flex;
+  justify-content: space-between;
+}
+.brutal-filters h3 .x { cursor: pointer; }
+.brutal-row {
+  border-bottom: 2px solid #000;
+  padding: 10px 14px;
+}
+.brutal-row:last-child { border-bottom: 0; }
+.brutal-row .lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+}
+.brutal-row .val {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.brutal-row .val .light { color: #999; }
+.brutal-slider-track {
+  height: 6px;
+  background: #f0f0f0;
+  position: relative;
+  margin: 8px 0 4px;
+}
+.brutal-slider-track::after {
+  content: '';
+  position: absolute;
+  left: 10%; right: 30%;
+  top: 0; bottom: 0;
+  background: #000;
+}
+.brutal-slider-track .knob {
+  position: absolute;
+  top: 50%;
+  width: 14px; height: 14px;
+  background: #fff;
+  border: 2px solid #000;
+  transform: translate(-50%, -50%);
+}
+.brutal-slider-track .knob.k1 { left: 10%; }
+.brutal-slider-track .knob.k2 { left: 70%; }
+.brutal-row .ticks {
+  font-size: 9px;
+  color: #999;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+.brutal-tab-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 6px; }
+.brutal-tab {
+  padding: 6px 0;
+  text-align: center;
+  border: 2px solid #000;
+  border-right: 0;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #fff;
+}
+.brutal-tab:last-child { border-right: 2px solid #000; }
+.brutal-tab.on { background: #000; color: #fff; }
+.brutal-tag-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.brutal-tag {
+  border: 2px solid #000;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.brutal-tag.on { background: #000; color: #fff; }
+
+.brutal-listings-drawer {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  z-index: 10;
+  background: #fff;
+  color: #000;
+  border-top: 4px solid #000;
+  height: 220px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.brutal-drawer-head {
+  padding: 8px 24px;
+  border-bottom: 2px solid #000;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+.brutal-drawer-head .pill {
+  background: #000;
+  color: #fff;
+  padding: 3px 8px;
+}
+.brutal-drawer-head .filter-info {
+  color: #666;
+  margin-left: auto;
+}
+.brutal-drawer-list {
+  display: flex;
+  overflow-x: auto;
+  padding: 14px 24px;
+  gap: 14px;
+  flex: 1;
+}
+.brutal-drawer-list::-webkit-scrollbar { height: 8px; }
+.brutal-drawer-list::-webkit-scrollbar-track { background: #fff; border-top: 1px solid #000; }
+.brutal-drawer-list::-webkit-scrollbar-thumb { background: #000; }
+.brutal-card {
+  flex-shrink: 0;
+  width: 240px;
+  border: 2px solid #000;
+  background: #fff;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  transition: transform 0.1s;
+}
+.brutal-card:hover { transform: translate(-2px, -2px); box-shadow: 4px 4px 0 #000; }
+.brutal-card .img {
+  background: repeating-linear-gradient(45deg, #000 0 6px, #fff 6px 12px);
+  aspect-ratio: 1;
+  position: relative;
+}
+.brutal-card .img::after {
+  content: attr(data-id);
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: #000;
+  color: #fff;
+  font-size: 9px;
+  text-align: center;
+  padding: 2px 0;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.brutal-card .info {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+}
+.brutal-card .price {
+  font-size: 16px;
+  font-weight: 700;
+}
+.brutal-card .specs {
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.brutal-card .name {
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.brutal-card .pri { font-size: 9px; padding: 1px 4px; background: #000; color: #fff; align-self: flex-start; margin-top: 2px; }
+
+.brutal-stats {
+  position: absolute;
+  top: 70px;
+  right: 24px;
+  z-index: 10;
+  background: #000;
+  color: #fff;
+  border: 3px solid #fff;
+  padding: 0;
+  width: 220px;
+}
+.brutal-stat-row {
+  padding: 10px 14px;
+  border-bottom: 2px solid #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.brutal-stat-row:last-child { border-bottom: 0; }
+.brutal-stat-row .v { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.brutal-stat-row.alert .v { color: #ff0000; }
+
+.brutal-marker {
+  fill: #fff;
+  stroke: #000;
+  stroke-width: 2;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.brutal-marker:hover { fill: #ff0000; }
+.brutal-marker.priority { fill: #ff0000; }
+
+/* ============================================================
+   MOCKUP 3: EDITORIAL ATELIER
+   ============================================================ */
+.lux {
+  font-family: 'Lora', serif;
+  background: #f6f1e8;
+  color: #1a1410;
+  height: 100%;
+  min-height: 720px;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  grid-template-rows: 88px 1fr;
+}
+.lux-header {
+  grid-column: 1 / -1;
+  background: #f6f1e8;
+  border-bottom: 1px solid #1a1410;
+  padding: 0 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+.lux-header::after {
+  content: '';
+  position: absolute;
+  bottom: -4px; left: 0; right: 0;
+  height: 2px;
+  background: #1a1410;
+}
+.lux-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.lux-brand h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 500;
+  font-size: 32px;
+  letter-spacing: -0.01em;
+  margin: 0;
+  font-style: italic;
+}
+.lux-brand .vol {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: #5a4a3a;
+  text-transform: uppercase;
+  border-left: 1px solid #1a1410;
+  padding-left: 16px;
+}
+.lux-nav {
+  display: flex;
+  gap: 32px;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.lux-nav a {
+  color: #1a1410;
+  text-decoration: none;
+  font-weight: 500;
+  position: relative;
+  cursor: pointer;
+}
+.lux-nav a.on::after, .lux-nav a:hover::after {
+  content: '';
+  position: absolute;
+  bottom: -4px; left: 0; right: 0;
+  height: 1px;
+  background: #8b1a1a;
+}
+.lux-nav a.on { color: #8b1a1a; }
+.lux-account {
+  width: 36px; height: 36px;
+  border: 1px solid #1a1410;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 16px;
+  cursor: pointer;
+  background: #f6f1e8;
+}
+.lux-account:hover { background: #1a1410; color: #f6f1e8; }
+
+.lux-canvas {
+  position: relative;
+  background: #efe7d7;
+  overflow: hidden;
+  border-right: 1px solid #1a1410;
+}
+.lux-canvas::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(26,20,16,0.04) 1px, transparent 1px);
+  background-size: 6px 6px;
+  pointer-events: none;
+}
+.lux-canvas svg { width: 100%; height: 100%; display: block; }
+
+.lux-section-title {
+  position: absolute;
+  top: 32px; left: 40px;
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.lux-section-title .num {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 56px;
+  font-weight: 400;
+  color: #8b1a1a;
+  line-height: 1;
+}
+.lux-section-title .text {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px;
+  font-weight: 500;
+}
+.lux-section-title .text small {
+  display: block;
+  font-family: 'Lora', serif;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #5a4a3a;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+.lux-filter-strip {
+  position: absolute;
+  bottom: 32px;
+  left: 40px;
+  right: 40px;
+  z-index: 5;
+  background: #f6f1e8;
+  border: 1px solid #1a1410;
+  padding: 18px 28px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  box-shadow: 4px 4px 0 #1a1410;
+}
+.lux-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.lux-filter .lbl {
+  font-family: 'Lora', serif;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #5a4a3a;
+  font-weight: 500;
+}
+.lux-filter .val {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 18px;
+  font-weight: 500;
+}
+.lux-filter .val em { color: #8b1a1a; font-style: italic; }
+.lux-filter-divider {
+  width: 1px;
+  height: 28px;
+  background: #1a1410;
+  opacity: 0.3;
+}
+.lux-cta {
+  background: #8b1a1a;
+  color: #f6f1e8;
+  border: 0;
+  padding: 12px 20px;
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 16px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.lux-cta:hover { background: #1a1410; }
+
+.lux-region-pill {
+  position: absolute;
+  top: 32px; right: 40px;
+  z-index: 5;
+  background: #f6f1e8;
+  border: 1px solid #1a1410;
+  padding: 8px 14px 8px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.lux-region-pill::before {
+  content: '';
+  width: 24px; height: 24px;
+  background: #8b1a1a;
+  border-radius: 50%;
+  display: inline-block;
+}
+.lux-region-pill em {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 11px;
+  color: #5a4a3a;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lux-aside {
+  background: #f6f1e8;
+  overflow-y: auto;
+  padding: 24px 32px 32px;
+}
+.lux-aside h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 28px;
+  font-weight: 500;
+  margin: 0 0 4px;
+  border-bottom: 1px solid #1a1410;
+  padding-bottom: 12px;
+}
+.lux-aside .lede {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: #5a4a3a;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+.lux-piece {
+  border-bottom: 1px solid rgba(26, 20, 16, 0.2);
+  padding: 16px 0;
+  cursor: pointer;
+  transition: padding 0.2s;
+}
+.lux-piece:hover { padding-left: 8px; }
+.lux-piece-no {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 13px;
+  color: #8b1a1a;
+}
+.lux-piece h3 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 19px;
+  font-weight: 500;
+  margin: 4px 0 6px;
+  line-height: 1.2;
+}
+.lux-piece .meta {
+  font-size: 12px;
+  color: #5a4a3a;
+  font-style: italic;
+}
+.lux-piece-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: center;
+  margin-top: 10px;
+}
+.lux-piece-img {
+  background: linear-gradient(135deg, #d4c5a8, #8b6f4a);
+  width: 80px; height: 64px;
+  position: relative;
+}
+.lux-piece-img::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.3));
+}
+.lux-piece-price {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+}
+.lux-piece-price small {
+  display: block;
+  font-family: 'Lora', serif;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: #5a4a3a;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.lux-piece-tags {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-style: italic;
+  color: #5a4a3a;
+}
+.lux-piece-tags span::before { content: '— '; }
+.lux-piece-tags span:first-child::before { content: ''; }
+
+.lux-marker { cursor: pointer; }
+.lux-marker:hover circle.outer { fill: #8b1a1a; }
+
+/* ============================================================
+   MOCKUP 4: CYBERPUNK COMMAND
+   ============================================================ */
+.cyber {
+  font-family: 'Rajdhani', sans-serif;
+  background: #050714;
+  color: #d8f4ff;
+  height: 100%;
+  min-height: 720px;
+  position: relative;
+  overflow: hidden;
+}
+.cyber::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 230, 230, 0.025) 2px, rgba(0, 230, 230, 0.025) 4px);
+  pointer-events: none;
+  z-index: 100;
+}
+.cyber-grid-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(0, 230, 230, 0.08), transparent 50%),
+    radial-gradient(ellipse at 80% 70%, rgba(255, 0, 153, 0.08), transparent 50%),
+    linear-gradient(rgba(0, 230, 230, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 230, 230, 0.06) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 60px 60px, 60px 60px;
+}
+
+.cyber-header {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 10;
+  padding: 14px 24px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 24px;
+  align-items: center;
+  background: rgba(5, 7, 20, 0.85);
+  border-bottom: 1px solid rgba(0, 230, 230, 0.3);
+  backdrop-filter: blur(8px);
+}
+.cyber-logo {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: 0.2em;
+  color: #00e6e6;
+  text-shadow: 0 0 12px rgba(0, 230, 230, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cyber-logo::before {
+  content: '◆';
+  color: #ff0099;
+  text-shadow: 0 0 12px rgba(255, 0, 153, 0.8);
+}
+.cyber-bread {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: #6da4a8;
+  letter-spacing: 0.04em;
+}
+.cyber-bread span { color: #00e6e6; }
+.cyber-bread .blink {
+  color: #ff0099;
+  animation: cyber-blink 1.5s steps(2) infinite;
+}
+@keyframes cyber-blink { 50% { opacity: 0; } }
+.cyber-status {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+}
+.cyber-status .item {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  line-height: 1.1;
+}
+.cyber-status .item .lbl { color: #6da4a8; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
+.cyber-status .item .v { color: #d8f4ff; font-size: 13px; font-weight: 700; }
+.cyber-status .item .v.warn { color: #ff0099; }
+.cyber-status .item .v.ok { color: #56ff8a; }
+
+.cyber-map-wrap {
+  position: absolute;
+  inset: 56px 360px 200px 280px;
+  background: #050714;
+  border: 1px solid rgba(0, 230, 230, 0.3);
+  margin: 16px;
+  overflow: hidden;
+}
+.cyber-map-wrap::before {
+  content: 'GRID 47.HEL.CH | LIVE';
+  position: absolute;
+  top: 8px; right: 12px;
+  z-index: 3;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: #00e6e6;
+  letter-spacing: 0.1em;
+}
+.cyber-map-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(45deg, transparent 0 60px, rgba(0,230,230,0.04) 60px 61px);
+  pointer-events: none;
+}
+.cyber-map-wrap svg { width: 100%; height: 100%; display: block; }
+.cyber-corner {
+  position: absolute;
+  width: 14px; height: 14px;
+  border: 2px solid #00e6e6;
+  z-index: 4;
+}
+.cyber-corner.tl { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.cyber-corner.tr { top: -1px; right: -1px; border-left: 0; border-bottom: 0; }
+.cyber-corner.bl { bottom: -1px; left: -1px; border-right: 0; border-top: 0; }
+.cyber-corner.br { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+
+.cyber-side-left {
+  position: absolute;
+  top: 56px; bottom: 200px;
+  left: 16px;
+  width: 248px;
+  background: rgba(11, 18, 38, 0.85);
+  border: 1px solid rgba(0, 230, 230, 0.3);
+  margin: 16px 0;
+  overflow-y: auto;
+  backdrop-filter: blur(6px);
+}
+.cyber-panel-head {
+  background: linear-gradient(90deg, rgba(0,230,230,0.15), transparent);
+  padding: 8px 14px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #00e6e6;
+  border-bottom: 1px solid rgba(0, 230, 230, 0.3);
+  text-transform: uppercase;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.cyber-panel-head .led {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #56ff8a;
+  box-shadow: 0 0 8px #56ff8a;
+  animation: cyber-pulse 2s infinite;
+}
+@keyframes cyber-pulse { 50% { opacity: 0.4; } }
+.cyber-section { padding: 14px; border-bottom: 1px solid rgba(0, 230, 230, 0.15); }
+.cyber-section:last-child { border-bottom: 0; }
+.cyber-section-lbl {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: #6da4a8;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+.cyber-section-lbl .v { color: #00e6e6; font-weight: 700; }
+
+.cyber-input-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.cyber-input {
+  background: rgba(0, 230, 230, 0.06);
+  border: 1px solid rgba(0, 230, 230, 0.4);
+  color: #00e6e6;
+  padding: 6px 10px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  width: 100%;
+}
+.cyber-input:focus { outline: 1px solid #ff0099; outline-offset: -1px; }
+
+.cyber-pill-list {
+  display: flex; flex-wrap: wrap; gap: 5px;
+}
+.cyber-pill {
+  background: transparent;
+  border: 1px solid rgba(0, 230, 230, 0.4);
+  color: #d8f4ff;
+  padding: 4px 9px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.15s;
+}
+.cyber-pill:hover { border-color: #00e6e6; color: #00e6e6; }
+.cyber-pill.on {
+  background: rgba(0, 230, 230, 0.2);
+  border-color: #00e6e6;
+  color: #00e6e6;
+  box-shadow: 0 0 8px rgba(0, 230, 230, 0.3);
+}
+.cyber-pill.danger.on {
+  background: rgba(255, 0, 153, 0.2);
+  border-color: #ff0099;
+  color: #ff0099;
+  box-shadow: 0 0 8px rgba(255, 0, 153, 0.3);
+}
+
+.cyber-source-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+}
+.cyber-source-row .name { color: #d8f4ff; }
+.cyber-source-row .count { color: #00e6e6; }
+.cyber-source-row .toggle {
+  width: 26px; height: 14px;
+  border: 1px solid #00e6e6;
+  position: relative;
+  cursor: pointer;
+}
+.cyber-source-row .toggle::after {
+  content: '';
+  position: absolute;
+  top: 1px; left: 11px;
+  width: 10px; height: 10px;
+  background: #00e6e6;
+  transition: transform 0.15s;
+  box-shadow: 0 0 6px #00e6e6;
+}
+.cyber-source-row.off .toggle::after { left: 1px; background: #6da4a8; box-shadow: none; }
+.cyber-source-row.off .name, .cyber-source-row.off .count { color: #6da4a8; }
+
+.cyber-side-right {
+  position: absolute;
+  top: 56px; bottom: 200px;
+  right: 16px;
+  width: 320px;
+  background: rgba(11, 18, 38, 0.85);
+  border: 1px solid rgba(255, 0, 153, 0.3);
+  margin: 16px 0;
+  overflow-y: auto;
+  backdrop-filter: blur(6px);
+}
+.cyber-side-right .cyber-panel-head {
+  color: #ff0099;
+  background: linear-gradient(90deg, rgba(255, 0, 153, 0.15), transparent);
+  border-color: rgba(255, 0, 153, 0.3);
+}
+.cyber-target {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 0, 153, 0.15);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+}
+.cyber-target:hover { background: rgba(255, 0, 153, 0.06); }
+.cyber-target::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: transparent;
+}
+.cyber-target.priority::before { background: #ff0099; box-shadow: 0 0 10px #ff0099; }
+.cyber-target-row1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: #6da4a8;
+  margin-bottom: 4px;
+}
+.cyber-target-row1 .id { color: #00e6e6; }
+.cyber-target-row1 .score-v { color: #ff0099; font-weight: 700; }
+.cyber-target h4 {
+  margin: 0 0 4px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: #d8f4ff;
+}
+.cyber-target .addr {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: #6da4a8;
+  margin-bottom: 8px;
+}
+.cyber-target-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+}
+.cyber-target-grid .cell {
+  border: 1px solid rgba(0, 230, 230, 0.2);
+  padding: 3px 6px;
+}
+.cyber-target-grid .cell .lbl { color: #6da4a8; font-size: 9px; letter-spacing: 0.08em; }
+.cyber-target-grid .cell .v { color: #00e6e6; font-weight: 700; }
+.cyber-target-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+.cyber-target-actions button {
+  flex: 1;
+  background: transparent;
+  border: 1px solid #00e6e6;
+  color: #00e6e6;
+  padding: 4px 0;
+  font: inherit;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.cyber-target-actions button:hover { background: rgba(0, 230, 230, 0.15); }
+.cyber-target-actions button.go { border-color: #ff0099; color: #ff0099; }
+.cyber-target-actions button.go:hover { background: rgba(255, 0, 153, 0.15); }
+
+.cyber-bottom {
+  position: absolute;
+  bottom: 16px; left: 16px; right: 16px;
+  height: 168px;
+  background: rgba(11, 18, 38, 0.85);
+  border: 1px solid rgba(0, 230, 230, 0.3);
+  backdrop-filter: blur(6px);
+  display: grid;
+  grid-template-columns: 220px 220px 1fr;
+}
+.cyber-bottom > div { border-right: 1px solid rgba(0, 230, 230, 0.2); padding: 12px 16px; }
+.cyber-bottom > div:last-child { border-right: 0; }
+.cyber-bottom h5 {
+  margin: 0 0 8px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: #00e6e6;
+  text-transform: uppercase;
+}
+.cyber-bigstat {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 36px;
+  font-weight: 900;
+  color: #00e6e6;
+  text-shadow: 0 0 14px rgba(0, 230, 230, 0.4);
+  line-height: 1;
+}
+.cyber-bigstat small {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: #6da4a8;
+  letter-spacing: 0.1em;
+  display: block;
+  margin-top: 6px;
+  font-weight: 400;
+  text-shadow: none;
+}
+.cyber-bars { display: flex; flex-direction: column; gap: 6px; }
+.cyber-bar-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 32px;
+  gap: 8px;
+  align-items: center;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+}
+.cyber-bar-row .lbl { color: #6da4a8; }
+.cyber-bar-track { height: 6px; background: rgba(0, 230, 230, 0.1); border: 1px solid rgba(0, 230, 230, 0.3); position: relative; }
+.cyber-bar-track .fill {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  background: linear-gradient(90deg, #00e6e6, #56ff8a);
+  box-shadow: 0 0 6px rgba(0, 230, 230, 0.5);
+}
+.cyber-bar-row .v { color: #00e6e6; font-weight: 700; text-align: right; }
+.cyber-pipeline {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  height: calc(100% - 22px);
+}
+.cyber-stage {
+  border: 1px solid rgba(0, 230, 230, 0.3);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.cyber-stage.alert { border-color: #ff0099; box-shadow: inset 0 0 8px rgba(255, 0, 153, 0.2); }
+.cyber-stage .name {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: #6da4a8;
+  text-transform: uppercase;
+}
+.cyber-stage .v {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #d8f4ff;
+  margin-top: 2px;
+  line-height: 1;
+}
+.cyber-stage.alert .v { color: #ff0099; text-shadow: 0 0 8px #ff0099; }
+.cyber-stage .delta {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: #56ff8a;
+  margin-top: auto;
+}
+.cyber-stage .delta.neg { color: #ff0099; }
+
+.cyber-marker { cursor: pointer; }
+.cyber-marker circle {
+  fill: #00e6e6;
+  filter: drop-shadow(0 0 4px #00e6e6);
+}
+.cyber-marker.priority circle { fill: #ff0099; filter: drop-shadow(0 0 6px #ff0099); }
+
+/* ============================================================
+   MOCKUP 5: BIOPHILIC GARDEN
+   ============================================================ */
+.organic {
+  font-family: 'Quicksand', sans-serif;
+  background: linear-gradient(135deg, #f4ede0 0%, #e8e4d2 100%);
+  color: #2f3e2c;
+  height: 100%;
+  min-height: 720px;
+  position: relative;
+  padding: 22px;
+  overflow-y: auto;
+}
+.organic-header {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 28px;
+  padding: 14px 22px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 18px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.6);
+  box-shadow: 0 4px 18px rgba(47, 62, 44, 0.08);
+}
+.organic-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Caveat', cursive;
+  font-size: 26px;
+  font-weight: 700;
+  color: #4a5a3a;
+}
+.organic-logo .leaf {
+  width: 32px; height: 32px;
+  background: radial-gradient(ellipse 70% 100% at 30% 50%, #7fa074, #4a5a3a);
+  border-radius: 50% 0 50% 50%;
+  transform: rotate(-30deg);
+  display: inline-block;
+}
+.organic-search {
+  background: #fff;
+  border: 0;
+  border-radius: 18px;
+  padding: 10px 16px;
+  font: inherit;
+  font-size: 14px;
+  width: 100%;
+  max-width: 480px;
+  justify-self: center;
+  box-shadow: inset 0 1px 3px rgba(47, 62, 44, 0.1);
+}
+.organic-search::placeholder { color: #8a9485; font-style: italic; }
+.organic-account-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.organic-pill-link {
+  background: transparent;
+  border: 0;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5a3a;
+  cursor: pointer;
+  border-radius: 12px;
+}
+.organic-pill-link:hover { background: rgba(255,255,255,0.6); }
+.organic-avatar {
+  width: 38px; height: 38px;
+  background: linear-gradient(135deg, #c97b5e, #a85842);
+  border-radius: 50%;
+  font-family: 'Caveat', cursive;
+  color: #fff;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.organic-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 18px;
+  height: calc(100% - 90px);
+}
+
+.organic-map-card {
+  background: #fff;
+  border-radius: 28px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(47, 62, 44, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+.organic-map-head {
+  padding: 18px 24px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.organic-map-head h2 {
+  margin: 0;
+  font-family: 'DM Serif Display', serif;
+  font-weight: 400;
+  font-size: 24px;
+  color: #2f3e2c;
+}
+.organic-map-head h2 em {
+  font-family: 'Caveat', cursive;
+  color: #c97b5e;
+  font-size: 28px;
+}
+.organic-map-toggle {
+  display: flex;
+  background: #f4ede0;
+  border-radius: 99px;
+  padding: 4px;
+  gap: 2px;
+}
+.organic-map-toggle button {
+  background: transparent;
+  border: 0;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6a7a5a;
+  border-radius: 99px;
+  cursor: pointer;
+}
+.organic-map-toggle button.on {
+  background: #fff;
+  color: #2f3e2c;
+  box-shadow: 0 2px 6px rgba(47,62,44,0.08);
+}
+
+.organic-map {
+  flex: 1;
+  margin: 0 12px 12px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #c8d4b8 0%, #a8b89a 50%, #8aa088 100%);
+  position: relative;
+  overflow: hidden;
+}
+.organic-map::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 30% 40% at 20% 30%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(ellipse 25% 30% at 75% 70%, rgba(255,255,255,0.3), transparent);
+}
+.organic-map svg { width: 100%; height: 100%; display: block; position: relative; z-index: 2; }
+
+.organic-filter-cluster {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  z-index: 10;
+}
+.organic-chip-soft {
+  background: rgba(255, 255, 255, 0.92);
+  border: 0;
+  border-radius: 99px;
+  padding: 10px 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2f3e2c;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(47, 62, 44, 0.12);
+  transition: all 0.2s;
+  backdrop-filter: blur(6px);
+}
+.organic-chip-soft:hover { transform: translateY(-2px); }
+.organic-chip-soft .ico {
+  width: 22px; height: 22px;
+  background: #f4ede0;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+}
+.organic-chip-soft.active {
+  background: #4a5a3a;
+  color: #f4ede0;
+}
+.organic-chip-soft.active .ico { background: rgba(255,255,255,0.2); color: #f4ede0; }
+.organic-chip-soft small {
+  font-family: 'Caveat', cursive;
+  font-size: 14px;
+  color: #c97b5e;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+.organic-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.organic-card {
+  background: #fff;
+  border-radius: 24px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 18px rgba(47, 62, 44, 0.08);
+}
+.organic-card h3 {
+  margin: 0 0 12px;
+  font-family: 'DM Serif Display', serif;
+  font-weight: 400;
+  font-size: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.organic-card h3 .pill {
+  font-family: 'Caveat', cursive;
+  font-size: 14px;
+  color: #c97b5e;
+  font-weight: 700;
+}
+.organic-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px dashed rgba(74, 90, 58, 0.15);
+  font-size: 13px;
+}
+.organic-stat-row:last-child { border-bottom: 0; }
+.organic-stat-row .lbl { color: #6a7a5a; }
+.organic-stat-row .v {
+  font-weight: 700;
+  color: #2f3e2c;
+}
+.organic-stat-row .v em {
+  font-family: 'Caveat', cursive;
+  color: #c97b5e;
+  font-size: 16px;
+  font-weight: 700;
+  font-style: normal;
+}
+
+.organic-listings-card {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.organic-listing {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px dashed rgba(74, 90, 58, 0.15);
+  cursor: pointer;
+  align-items: center;
+  transition: padding 0.2s;
+}
+.organic-listing:hover { padding-left: 6px; }
+.organic-listing:last-child { border-bottom: 0; }
+.organic-listing-img {
+  width: 56px; height: 56px;
+  border-radius: 50% 50% 50% 0;
+  background: linear-gradient(135deg, #d4c5a8, #a8866c);
+  flex-shrink: 0;
+  position: relative;
+  transform: rotate(-12deg);
+  box-shadow: 0 2px 8px rgba(47, 62, 44, 0.15);
+}
+.organic-listing-img.b2 { background: linear-gradient(135deg, #c97b5e, #8a4f3a); }
+.organic-listing-img.b3 { background: linear-gradient(135deg, #8aa088, #4a5a3a); }
+.organic-listing-img.b4 { background: linear-gradient(135deg, #d4a86c, #a88848); }
+.organic-listing-img::after {
+  content: attr(data-num);
+  position: absolute;
+  top: -6px; right: -8px;
+  background: #fff;
+  color: #2f3e2c;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 14px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transform: rotate(12deg);
+  box-shadow: 0 2px 4px rgba(47,62,44,0.12);
+}
+.organic-listing-info { min-width: 0; }
+.organic-listing-info .price {
+  font-family: 'DM Serif Display', serif;
+  font-size: 18px;
+  color: #2f3e2c;
+}
+.organic-listing-info .title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a5a3a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.organic-listing-info .meta {
+  font-size: 11px;
+  color: #8a9485;
+  margin-top: 2px;
+}
+.organic-listing-info .meta em {
+  font-family: 'Caveat', cursive;
+  color: #c97b5e;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.organic-marker { cursor: pointer; }
+.organic-marker:hover .leaf-shape { transform: translateY(-3px); }
+.organic-marker .leaf-shape { transition: transform 0.2s; }
+
+</style>
+</head>
+<body>
+
+<div class="gallery-shell">
+
+  <header class="gallery-header">
+    <div class="gallery-title">
+      Apartment Search <span style="color:#71717a;font-weight:500;">/ 5 Map-Centric Concepts</span>
+    </div>
+    <div class="gallery-meta">PROJECT: SUISSE-RENT · 2026</div>
+  </header>
+
+  <div class="gallery-controls">
+    <div class="concept-name">
+      <span id="concept-name-label">01 · Swiss Precision</span>
+      <span class="concept-tag" id="concept-tag-label">Swiss / Editorial Grid</span>
+    </div>
+    <div class="slider-group">
+      <button class="arrow-btn" id="prev-btn">‹</button>
+      <input type="range" min="1" max="5" value="1" class="slider" id="concept-slider">
+      <button class="arrow-btn" id="next-btn">›</button>
+    </div>
+    <div class="dots" id="dots-row">
+      <div class="dot active" data-i="1"></div>
+      <div class="dot" data-i="2"></div>
+      <div class="dot" data-i="3"></div>
+      <div class="dot" data-i="4"></div>
+      <div class="dot" data-i="5"></div>
+    </div>
+  </div>
+
+  <div class="mockup-stage">
+
+    <!-- ========== MOCKUP 1 · SWISS PRECISION ========== -->
+    <section class="mockup-panel active" data-i="1">
+      <div class="swiss">
+        <header class="swiss-header">
+          <div class="swiss-logo"><span class="cross"></span> Helvètes <span style="opacity:.5;font-weight:500;">/ Apartment Index</span></div>
+          <nav class="swiss-nav">
+            <button class="on">Carte</button>
+            <button>Annonces</button>
+            <button>Profils</button>
+            <button>Compte</button>
+          </nav>
+          <div class="swiss-profile-pill">
+            <span class="dot"></span> Lausanne · 2 pièces · 1400 CHF max
+          </div>
+        </header>
+
+        <aside class="swiss-sidebar">
+          <div class="swiss-section">
+            <div class="swiss-section-label">Loyer total <span class="count">CHF</span></div>
+            <div class="swiss-range-row">
+              <input class="swiss-input" value="0">
+              <input class="swiss-input" value="1400">
+            </div>
+          </div>
+
+          <div class="swiss-section">
+            <div class="swiss-section-label">Pièces minimum</div>
+            <div class="swiss-chip-list">
+              <button class="swiss-chip">1</button>
+              <button class="swiss-chip">1.5</button>
+              <button class="swiss-chip on">2</button>
+              <button class="swiss-chip">2.5</button>
+              <button class="swiss-chip">3</button>
+              <button class="swiss-chip">3.5+</button>
+            </div>
+          </div>
+
+          <div class="swiss-section">
+            <div class="swiss-section-label">Surface (m²)</div>
+            <div class="swiss-range-row">
+              <input class="swiss-input" value="40">
+              <input class="swiss-input" value="—">
+            </div>
+            <label class="swiss-check" style="margin-top:8px;">
+              <input type="checkbox" checked><span class="box"></span>
+              <span class="label">Accepter sans surface</span>
+            </label>
+          </div>
+
+          <div class="swiss-section">
+            <div class="swiss-section-label">Statut</div>
+            <div class="swiss-chip-list">
+              <button class="swiss-chip on">À contacter</button>
+              <button class="swiss-chip">Visite</button>
+              <button class="swiss-chip">Dossier</button>
+              <button class="swiss-chip">Relance</button>
+            </div>
+          </div>
+
+          <div class="swiss-section">
+            <div class="swiss-section-label">Sources <span class="count">6</span></div>
+            <div class="swiss-check-list">
+              <label class="swiss-check"><input type="checkbox" checked><span class="box"></span><span class="label">immobilier.ch</span><span class="num">38</span></label>
+              <label class="swiss-check"><input type="checkbox" checked><span class="box"></span><span class="label">flatfox.ch</span><span class="num">22</span></label>
+              <label class="swiss-check"><input type="checkbox" checked><span class="box"></span><span class="label">naef.ch</span><span class="num">9</span></label>
+              <label class="swiss-check"><input type="checkbox" checked><span class="box"></span><span class="label">bernard-nicod.ch</span><span class="num">7</span></label>
+              <label class="swiss-check"><input type="checkbox" checked><span class="box"></span><span class="label">Retraites Pop.</span><span class="num">4</span></label>
+              <label class="swiss-check"><input type="checkbox"><span class="box"></span><span class="label">anibis.ch</span><span class="num">12</span></label>
+            </div>
+          </div>
+
+          <div class="swiss-section">
+            <div class="swiss-section-label">Ancienneté max</div>
+            <div class="swiss-chip-list">
+              <button class="swiss-chip">7j</button>
+              <button class="swiss-chip">14j</button>
+              <button class="swiss-chip on">30j</button>
+              <button class="swiss-chip">60j</button>
+            </div>
+          </div>
+        </aside>
+
+        <main class="swiss-map">
+          <div class="swiss-map-controls">
+            <button class="swiss-map-btn">+</button>
+            <button class="swiss-map-btn">−</button>
+            <button class="swiss-map-btn">⌖</button>
+          </div>
+          <div class="swiss-map-overlay">
+            <span class="big">80</span>
+            <span class="label">Annonces visibles</span>
+            <div style="margin-top:8px;">7 sans coordonnées</div>
+          </div>
+
+          <svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="swissdots" width="30" height="30" patternUnits="userSpaceOnUse">
+                <circle cx="15" cy="15" r="0.7" fill="#a8a29e"/>
+              </pattern>
+            </defs>
+            <rect width="800" height="600" fill="#e7e5e4"/>
+            <rect width="800" height="600" fill="url(#swissdots)"/>
+
+            <ellipse cx="220" cy="380" rx="90" ry="22" fill="#d4d4d4" opacity="0.7"/>
+            <ellipse cx="380" cy="320" rx="60" ry="14" fill="#d4d4d4" opacity="0.7"/>
+            <ellipse cx="540" cy="280" rx="40" ry="16" fill="#d4d4d4" opacity="0.7"/>
+
+            <path d="M 100 280 Q 140 220 220 230 Q 300 200 380 220 Q 460 200 540 230 Q 620 220 680 260 Q 720 290 700 350 Q 680 410 600 420 Q 520 430 450 410 Q 380 420 300 410 Q 220 420 160 380 Q 100 340 100 280 Z"
+              fill="none" stroke="#0a0a0a" stroke-width="1.5"/>
+
+            <g stroke="#a8a29e" stroke-dasharray="2,4" stroke-width="0.5" opacity="0.6">
+              <line x1="100" y1="320" x2="700" y2="320"/>
+              <line x1="100" y1="380" x2="700" y2="380"/>
+              <line x1="300" y1="200" x2="300" y2="430"/>
+              <line x1="500" y1="200" x2="500" y2="430"/>
+            </g>
+
+            <g font-family="JetBrains Mono" font-size="10" fill="#71717a" font-weight="600">
+              <text x="225" y="372" text-anchor="middle">LAC LÉMAN</text>
+              <text x="180" y="350">Lausanne</text>
+              <text x="120" y="370">Genève</text>
+              <text x="385" y="312">Neuchâtel</text>
+              <text x="540" y="272">Berne</text>
+              <text x="640" y="290">Zurich</text>
+              <text x="615" y="380">Lucerne</text>
+            </g>
+
+            <g class="swiss-marker">
+              <circle cx="180" cy="358" r="10" fill="#dc2626"/>
+              <text x="180" y="362" text-anchor="middle" font-family="Archivo" font-size="10" font-weight="800" fill="#fff">A</text>
+            </g>
+            <g class="swiss-marker">
+              <circle cx="200" cy="368" r="8" fill="#0a0a0a"/>
+              <text x="200" y="372" text-anchor="middle" font-family="Archivo" font-size="9" font-weight="800" fill="#fff">12</text>
+            </g>
+            <g class="swiss-marker">
+              <circle cx="225" cy="345" r="8" fill="#0a0a0a"/>
+              <text x="225" y="349" text-anchor="middle" font-family="Archivo" font-size="9" font-weight="800" fill="#fff">8</text>
+            </g>
+            <g class="swiss-marker">
+              <circle cx="155" cy="350" r="9" fill="#dc2626"/>
+              <text x="155" y="354" text-anchor="middle" font-family="Archivo" font-size="9" font-weight="800" fill="#fff">A</text>
+            </g>
+            <g class="swiss-marker">
+              <circle cx="265" cy="342" r="7" fill="#0a0a0a"/>
+              <text x="265" y="346" text-anchor="middle" font-family="Archivo" font-size="9" font-weight="800" fill="#fff">5</text>
+            </g>
+            <g class="swiss-marker">
+              <circle cx="125" cy="364" r="8" fill="#0a0a0a"/>
+              <text x="125" y="368" text-anchor="middle" font-family="Archivo" font-size="9" font-weight="800" fill="#fff">3</text>
+            </g>
+            <g class="swiss-marker">
+              <circle cx="380" cy="298" r="8" fill="#0a0a0a"/>
+              <text x="380" y="302" text-anchor="middle" font-family="Archivo" font-size="9" font-weight="800" fill="#fff">4</text>
+            </g>
+            <g class="swiss-marker">
+              <circle cx="540" cy="265" r="9" fill="#dc2626"/>
+              <text x="540" y="269" text-anchor="middle" font-family="Archivo" font-size="9" font-weight="800" fill="#fff">A</text>
+            </g>
+            <g class="swiss-marker">
+              <circle cx="565" cy="280" r="7" fill="#0a0a0a"/>
+              <text x="565" y="284" text-anchor="middle" font-family="Archivo" font-size="9" font-weight="800" fill="#fff">2</text>
+            </g>
+            <g class="swiss-marker">
+              <circle cx="635" cy="290" r="8" fill="#0a0a0a"/>
+              <text x="635" y="294" text-anchor="middle" font-family="Archivo" font-size="9" font-weight="800" fill="#fff">6</text>
+            </g>
+
+            <g>
+              <rect x="172" y="350" width="16" height="16" fill="none" stroke="#dc2626" stroke-width="2" transform="rotate(45 180 358)"/>
+              <text x="180" y="335" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#dc2626" font-weight="700">TRAVAIL</text>
+            </g>
+
+            <circle cx="180" cy="358" r="22" fill="none" stroke="#0a0a0a" stroke-width="1" stroke-dasharray="3,3"/>
+          </svg>
+        </main>
+
+        <aside class="swiss-listings">
+          <div class="swiss-listings-head">
+            <h3>Annonces · 80</h3>
+            <button class="swiss-sort-btn">Score ↓</button>
+          </div>
+          <div class="swiss-listing featured">
+            <div class="swiss-listing-img" data-num="01"></div>
+            <div class="swiss-listing-meta">
+              <span class="price">CHF 1'380</span>
+              <span class="title">2.5 pièces, Lausanne-Sud</span>
+              <span class="addr">Av. de Cour 88, 1007 Lausanne</span>
+              <span class="specs"><span>2.5p</span><span>62m²</span><span>🚌 12min</span></span>
+              <span class="badge">PRIORITÉ A</span>
+            </div>
+          </div>
+          <div class="swiss-listing">
+            <div class="swiss-listing-img" data-num="02"></div>
+            <div class="swiss-listing-meta">
+              <span class="price">CHF 1'280</span>
+              <span class="title">Studio rénové, Pully</span>
+              <span class="addr">Ch. de la Vallombreuse 4</span>
+              <span class="specs"><span>1.5p</span><span>38m²</span><span>🚌 18min</span></span>
+            </div>
+          </div>
+          <div class="swiss-listing featured">
+            <div class="swiss-listing-img" data-num="03"></div>
+            <div class="swiss-listing-meta">
+              <span class="price">CHF 1'410</span>
+              <span class="title">3 pièces sous-toit</span>
+              <span class="addr">Rue Pichard 12, 1003</span>
+              <span class="specs"><span>3p</span><span>71m²</span><span>🚌 6min</span></span>
+              <span class="badge">DIRECT RÉGIE</span>
+            </div>
+          </div>
+          <div class="swiss-listing">
+            <div class="swiss-listing-img" data-num="04"></div>
+            <div class="swiss-listing-meta">
+              <span class="price">CHF 1'195</span>
+              <span class="title">Appartement Renens</span>
+              <span class="addr">Rue de Lausanne 24</span>
+              <span class="specs"><span>2p</span><span>54m²</span><span>🚌 22min</span></span>
+            </div>
+          </div>
+          <div class="swiss-listing">
+            <div class="swiss-listing-img" data-num="05"></div>
+            <div class="swiss-listing-meta">
+              <span class="price">CHF 1'350</span>
+              <span class="title">2 pièces, Prilly</span>
+              <span class="addr">Ch. des Faverges 16</span>
+              <span class="specs"><span>2p</span><span>56m²</span><span>🚌 14min</span></span>
+            </div>
+          </div>
+          <div class="swiss-listing">
+            <div class="swiss-listing-img" data-num="06"></div>
+            <div class="swiss-listing-meta">
+              <span class="price">CHF 1'250</span>
+              <span class="title">Appartement Vevey-centre</span>
+              <span class="addr">Quai Perdonnet 8</span>
+              <span class="specs"><span>2.5p</span><span>59m²</span><span>🚌 28min</span></span>
+            </div>
+          </div>
+        </aside>
+
+        <footer class="swiss-statusbar">
+          <span>STATUT</span><strong>OK</strong>
+          <span>DERNIER SCAN</span><strong>il y a 11 min</strong>
+          <span>NOUVELLES (24h)</span><strong>+4</strong>
+          <span>RETIRÉES</span><strong>2</strong>
+          <button class="scan-btn">Scanner</button>
+        </footer>
+      </div>
+    </section>
+
+    <!-- ========== MOCKUP 2 · BRUTAL CONSOLE ========== -->
+    <section class="mockup-panel" data-i="2">
+      <div class="brutal">
+        <div class="brutal-noise"></div>
+        <div class="brutal-map">
+          <svg viewBox="0 0 1400 700" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            <g stroke="rgba(255,255,255,0.15)" fill="none" stroke-width="1">
+              <path d="M 100 300 Q 250 200 400 280 Q 550 260 700 220 Q 850 200 1000 250 Q 1150 280 1300 250"/>
+              <path d="M 100 350 Q 250 270 400 330 Q 550 310 700 270 Q 850 250 1000 300 Q 1150 330 1300 300"/>
+              <path d="M 100 400 Q 250 320 400 380 Q 550 360 700 320 Q 850 300 1000 350 Q 1150 380 1300 350"/>
+              <path d="M 100 450 Q 250 380 400 430 Q 550 410 700 370 Q 850 350 1000 400 Q 1150 430 1300 400"/>
+            </g>
+
+            <polygon points="380,440 480,425 540,440 510,470 410,475 360,455" fill="rgba(0,0,0,0.6)" stroke="#fff" stroke-width="1"/>
+            <polygon points="700,360 800,355 850,375 820,395 720,395 680,375" fill="rgba(0,0,0,0.6)" stroke="#fff" stroke-width="1"/>
+
+            <path d="M 200 280 L 350 250 L 500 220 L 650 200 L 800 220 L 950 240 L 1100 270 L 1200 320 L 1180 400 L 1100 460 L 950 480 L 800 470 L 650 480 L 500 470 L 350 460 L 250 420 L 200 360 Z"
+              fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="miter"/>
+
+            <g font-family="Space Mono" font-size="11" fill="#fff" font-weight="700">
+              <text x="430" y="445">[GENÈVE]</text>
+              <text x="465" y="438">[LAUSANNE]</text>
+              <text x="710" y="368">[BERNE]</text>
+              <text x="900" y="290">[ZÜRICH]</text>
+              <text x="1100" y="380">[LUGANO]</text>
+            </g>
+
+            <g font-family="Space Mono" font-size="9" fill="rgba(255,255,255,0.3)">
+              <text x="20" y="50">47.0°N</text>
+              <text x="20" y="350">46.5°N</text>
+              <text x="20" y="650">46.0°N</text>
+              <text x="100" y="690">06°E</text>
+              <text x="600" y="690">08°E</text>
+              <text x="1100" y="690">10°E</text>
+            </g>
+
+            <g class="brutal-marker priority"><rect x="442" y="412" width="14" height="14"/></g>
+            <g class="brutal-marker"><rect x="468" y="425" width="11" height="11"/></g>
+            <g class="brutal-marker priority"><rect x="495" y="430" width="14" height="14"/></g>
+            <g class="brutal-marker"><rect x="510" y="418" width="11" height="11"/></g>
+            <g class="brutal-marker"><rect x="385" y="438" width="11" height="11"/></g>
+            <g class="brutal-marker"><rect x="420" y="445" width="11" height="11"/></g>
+            <g class="brutal-marker"><rect x="710" y="372" width="11" height="11"/></g>
+            <g class="brutal-marker priority"><rect x="745" y="365" width="14" height="14"/></g>
+            <g class="brutal-marker"><rect x="780" y="360" width="11" height="11"/></g>
+            <g class="brutal-marker"><rect x="900" y="285" width="11" height="11"/></g>
+            <g class="brutal-marker"><rect x="938" y="295" width="11" height="11"/></g>
+
+            <rect x="488" y="423" width="28" height="28" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="4,3"/>
+            <line x1="503" y1="437" x2="700" y2="200" stroke="#fff" stroke-width="1" stroke-dasharray="3,3"/>
+          </svg>
+        </div>
+
+        <header class="brutal-header">
+          <h1>APT_INDEX.CH</h1>
+          <nav>
+            <a class="on">/MAP</a>
+            <a>/INDEX</a>
+            <a>/PROFILES</a>
+            <a>/LOGS</a>
+          </nav>
+          <div class="right">
+            <span class="ts">SCAN_T+11M · 80_LISTINGS · 4_NEW</span>
+            <button class="scan">▶ EXEC SCAN</button>
+          </div>
+        </header>
+
+        <aside class="brutal-filters">
+          <h3>FILTERS<span class="x">[×]</span></h3>
+          <div class="brutal-row">
+            <div class="lbl"><span>BUDGET</span><span>CHF</span></div>
+            <div class="val">800<span class="light"> → </span>1400</div>
+            <div class="brutal-slider-track">
+              <div class="knob k1"></div>
+              <div class="knob k2"></div>
+            </div>
+            <div class="ticks"><span>0</span><span>2000</span></div>
+          </div>
+          <div class="brutal-row">
+            <div class="lbl"><span>ROOMS_MIN</span></div>
+            <div class="brutal-tab-list">
+              <div class="brutal-tab">1.5</div>
+              <div class="brutal-tab on">2.0</div>
+              <div class="brutal-tab">2.5</div>
+              <div class="brutal-tab">3+</div>
+            </div>
+          </div>
+          <div class="brutal-row">
+            <div class="lbl"><span>SURFACE_M2</span></div>
+            <div class="val">≥40<span class="light"> · ALLOW_NULL=TRUE</span></div>
+          </div>
+          <div class="brutal-row">
+            <div class="lbl"><span>STATUS_FILTER</span></div>
+            <div class="brutal-tag-list">
+              <div class="brutal-tag on">CONTACT</div>
+              <div class="brutal-tag">VISITE</div>
+              <div class="brutal-tag">DOSSIER</div>
+              <div class="brutal-tag">RELANCE</div>
+              <div class="brutal-tag">ACCEPTED</div>
+              <div class="brutal-tag">REJECTED</div>
+            </div>
+          </div>
+          <div class="brutal-row">
+            <div class="lbl"><span>SOURCES</span><span>6/7</span></div>
+            <div class="brutal-tag-list">
+              <div class="brutal-tag on">IMMOBILIER</div>
+              <div class="brutal-tag on">FLATFOX</div>
+              <div class="brutal-tag on">NAEF</div>
+              <div class="brutal-tag on">B-NICOD</div>
+              <div class="brutal-tag on">RP</div>
+              <div class="brutal-tag">ANIBIS</div>
+            </div>
+          </div>
+          <div class="brutal-row">
+            <div class="lbl"><span>AGE_MAX</span></div>
+            <div class="val">30<span class="light"> DAYS</span></div>
+          </div>
+        </aside>
+
+        <aside class="brutal-stats">
+          <div class="brutal-stat-row">
+            <span>VISIBLE</span><span class="v">80</span>
+          </div>
+          <div class="brutal-stat-row alert">
+            <span>URGENT</span><span class="v">07</span>
+          </div>
+          <div class="brutal-stat-row">
+            <span>NEW_24H</span><span class="v">04</span>
+          </div>
+          <div class="brutal-stat-row">
+            <span>REMOVED</span><span class="v">02</span>
+          </div>
+          <div class="brutal-stat-row">
+            <span>NO_GEO</span><span class="v">07</span>
+          </div>
+          <div class="brutal-stat-row">
+            <span>SCORE_AVG</span><span class="v">62</span>
+          </div>
+        </aside>
+
+        <div class="brutal-listings-drawer">
+          <div class="brutal-drawer-head">
+            <span class="pill">RESULT_SET</span>
+            <span>QUERY = (BUDGET≤1400 ∩ ROOMS≥2 ∩ STATUS=CONTACT) → 80 ROWS</span>
+            <span class="filter-info">SORT = SCORE_DESC · CURSOR = 1/14</span>
+          </div>
+          <div class="brutal-drawer-list">
+            <div class="brutal-card">
+              <div class="img" data-id="ID_01"></div>
+              <div class="info">
+                <div>
+                  <div class="price">CHF 1380</div>
+                  <div class="specs">2.5P · 62M² · 12MIN</div>
+                </div>
+                <div>
+                  <div class="name">AV. DE COUR 88</div>
+                  <span class="pri">PRI:A · SCORE:84</span>
+                </div>
+              </div>
+            </div>
+            <div class="brutal-card">
+              <div class="img" data-id="ID_02"></div>
+              <div class="info">
+                <div>
+                  <div class="price">CHF 1410</div>
+                  <div class="specs">3.0P · 71M² · 6MIN</div>
+                </div>
+                <div>
+                  <div class="name">RUE PICHARD 12</div>
+                  <span class="pri">PRI:A · SCORE:81</span>
+                </div>
+              </div>
+            </div>
+            <div class="brutal-card">
+              <div class="img" data-id="ID_03"></div>
+              <div class="info">
+                <div>
+                  <div class="price">CHF 1280</div>
+                  <div class="specs">1.5P · 38M² · 18MIN</div>
+                </div>
+                <div>
+                  <div class="name">CH. VALLOMBREUSE 4</div>
+                  <span class="pri">PRI:B · SCORE:71</span>
+                </div>
+              </div>
+            </div>
+            <div class="brutal-card">
+              <div class="img" data-id="ID_04"></div>
+              <div class="info">
+                <div>
+                  <div class="price">CHF 1195</div>
+                  <div class="specs">2.0P · 54M² · 22MIN</div>
+                </div>
+                <div>
+                  <div class="name">RUE DE LAUSANNE 24</div>
+                  <span class="pri">PRI:B · SCORE:68</span>
+                </div>
+              </div>
+            </div>
+            <div class="brutal-card">
+              <div class="img" data-id="ID_05"></div>
+              <div class="info">
+                <div>
+                  <div class="price">CHF 1350</div>
+                  <div class="specs">2.0P · 56M² · 14MIN</div>
+                </div>
+                <div>
+                  <div class="name">CH. DES FAVERGES 16</div>
+                  <span class="pri">PRI:B · SCORE:65</span>
+                </div>
+              </div>
+            </div>
+            <div class="brutal-card">
+              <div class="img" data-id="ID_06"></div>
+              <div class="info">
+                <div>
+                  <div class="price">CHF 1250</div>
+                  <div class="specs">2.5P · 59M² · 28MIN</div>
+                </div>
+                <div>
+                  <div class="name">QUAI PERDONNET 8</div>
+                  <span class="pri">PRI:B · SCORE:60</span>
+                </div>
+              </div>
+            </div>
+            <div class="brutal-card">
+              <div class="img" data-id="ID_07"></div>
+              <div class="info">
+                <div>
+                  <div class="price">CHF 1395</div>
+                  <div class="specs">2.5P · 64M² · 9MIN</div>
+                </div>
+                <div>
+                  <div class="name">RTE DE BERNE 33</div>
+                  <span class="pri">PRI:B · SCORE:58</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== MOCKUP 3 · ATELIER DES TOITS ========== -->
+    <section class="mockup-panel" data-i="3">
+      <div class="lux">
+        <header class="lux-header">
+          <div class="lux-brand">
+            <h1>L'Atelier des Toits</h1>
+            <span class="vol">Vol. iv · Lausanne-Vaud</span>
+          </div>
+          <nav class="lux-nav">
+            <a class="on">La carte</a>
+            <a>Les annonces</a>
+            <a>Profils</a>
+            <a>Carnet</a>
+          </nav>
+          <div class="lux-account" title="Mon compte">S</div>
+        </header>
+
+        <div class="lux-canvas">
+          <div class="lux-section-title">
+            <span class="num">№01</span>
+            <span class="text">Le territoire <small>· 80 logements à explorer</small></span>
+          </div>
+
+          <div class="lux-region-pill">
+            <em>Région</em> Lausanne · 2 pièces
+          </div>
+
+          <svg viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="lux-hatch" x="0" y="0" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="6" stroke="#1a1410" stroke-width="0.3" opacity="0.15"/>
+              </pattern>
+              <radialGradient id="lux-water">
+                <stop offset="0%" stop-color="#a8b8c4" stop-opacity="0.5"/>
+                <stop offset="100%" stop-color="#8a9eaa" stop-opacity="0.7"/>
+              </radialGradient>
+            </defs>
+
+            <g stroke="#8b1a1a" stroke-width="0.6" fill="none" opacity="0.4">
+              <path d="M 100 360 Q 200 320 320 340 Q 440 350 560 320 Q 680 310 800 340"/>
+              <path d="M 100 380 Q 200 340 320 360 Q 440 370 560 340 Q 680 330 800 360"/>
+              <path d="M 100 400 Q 200 360 320 380 Q 440 390 560 360 Q 680 350 800 380"/>
+            </g>
+            <g stroke="#5a4a3a" stroke-width="0.4" fill="none" opacity="0.3">
+              <path d="M 50 280 Q 200 200 400 230 Q 600 250 800 220"/>
+              <path d="M 50 320 Q 200 240 400 270 Q 600 290 800 260"/>
+            </g>
+
+            <path d="M 80 290 Q 130 230 220 240 Q 320 220 410 240 Q 500 220 600 250 Q 700 240 760 290 Q 790 340 750 400 Q 690 450 590 450 Q 490 460 400 440 Q 310 460 220 440 Q 130 420 90 360 Q 60 320 80 290 Z"
+              fill="url(#lux-hatch)" stroke="#1a1410" stroke-width="1.5" opacity="0.9"/>
+
+            <path d="M 200 380 Q 250 365 320 372 Q 350 380 330 400 Q 280 410 230 405 Q 195 395 200 380 Z" fill="url(#lux-water)" stroke="#1a1410" stroke-width="0.6"/>
+            <path d="M 380 320 Q 410 312 450 318 Q 460 332 430 340 Q 395 340 380 320 Z" fill="url(#lux-water)" stroke="#1a1410" stroke-width="0.6"/>
+
+            <g transform="translate(820, 80)">
+              <circle r="22" fill="#f6f1e8" stroke="#1a1410" stroke-width="0.8"/>
+              <path d="M 0 -20 L 4 0 L 0 20 L -4 0 Z" fill="#8b1a1a"/>
+              <path d="M -20 0 L 0 -4 L 20 0 L 0 4 Z" fill="#1a1410" opacity="0.4"/>
+              <text y="-26" text-anchor="middle" font-family="Cormorant Garamond" font-size="11" font-style="italic" fill="#1a1410">N</text>
+            </g>
+
+            <g font-family="Cormorant Garamond" font-size="14" font-style="italic" fill="#1a1410">
+              <text x="265" y="378" text-anchor="middle" font-size="11" fill="#5a4a3a">— Lac Léman —</text>
+              <text x="225" y="372" font-weight="500">Lausanne</text>
+              <text x="155" y="392">Genève</text>
+              <text x="415" y="312">Neuchâtel</text>
+              <text x="500" y="285">Berne</text>
+              <text x="640" y="280">Zürich</text>
+              <text x="690" y="370">Lucerne</text>
+            </g>
+
+            <g class="lux-marker">
+              <circle class="outer" cx="225" cy="370" r="10" fill="#f6f1e8" stroke="#8b1a1a" stroke-width="1.5"/>
+              <circle cx="225" cy="370" r="4" fill="#8b1a1a"/>
+              <text x="225" y="390" text-anchor="middle" font-family="Cormorant Garamond" font-style="italic" font-size="10" fill="#1a1410">№01</text>
+            </g>
+            <g class="lux-marker">
+              <circle class="outer" cx="245" cy="362" r="8" fill="#f6f1e8" stroke="#1a1410" stroke-width="1.2"/>
+              <circle cx="245" cy="362" r="3" fill="#1a1410"/>
+            </g>
+            <g class="lux-marker">
+              <circle class="outer" cx="200" cy="380" r="8" fill="#f6f1e8" stroke="#1a1410" stroke-width="1.2"/>
+              <circle cx="200" cy="380" r="3" fill="#1a1410"/>
+            </g>
+            <g class="lux-marker">
+              <circle class="outer" cx="190" cy="365" r="8" fill="#f6f1e8" stroke="#1a1410" stroke-width="1.2"/>
+              <circle cx="190" cy="365" r="3" fill="#1a1410"/>
+            </g>
+            <g class="lux-marker">
+              <circle class="outer" cx="270" cy="365" r="8" fill="#f6f1e8" stroke="#1a1410" stroke-width="1.2"/>
+              <circle cx="270" cy="365" r="3" fill="#1a1410"/>
+            </g>
+            <g class="lux-marker">
+              <circle class="outer" cx="155" cy="385" r="9" fill="#f6f1e8" stroke="#8b1a1a" stroke-width="1.5"/>
+              <circle cx="155" cy="385" r="3.5" fill="#8b1a1a"/>
+            </g>
+            <g class="lux-marker">
+              <circle class="outer" cx="415" cy="298" r="8" fill="#f6f1e8" stroke="#1a1410" stroke-width="1.2"/>
+              <circle cx="415" cy="298" r="3" fill="#1a1410"/>
+            </g>
+            <g class="lux-marker">
+              <circle class="outer" cx="500" cy="270" r="9" fill="#f6f1e8" stroke="#8b1a1a" stroke-width="1.5"/>
+              <circle cx="500" cy="270" r="3.5" fill="#8b1a1a"/>
+            </g>
+            <g class="lux-marker">
+              <circle class="outer" cx="525" cy="278" r="8" fill="#f6f1e8" stroke="#1a1410" stroke-width="1.2"/>
+              <circle cx="525" cy="278" r="3" fill="#1a1410"/>
+            </g>
+            <g class="lux-marker">
+              <circle class="outer" cx="640" cy="270" r="8" fill="#f6f1e8" stroke="#1a1410" stroke-width="1.2"/>
+              <circle cx="640" cy="270" r="3" fill="#1a1410"/>
+            </g>
+            <g class="lux-marker">
+              <circle class="outer" cx="660" cy="285" r="8" fill="#f6f1e8" stroke="#1a1410" stroke-width="1.2"/>
+              <circle cx="660" cy="285" r="3" fill="#1a1410"/>
+            </g>
+
+            <line x1="225" y1="370" x2="850" y2="370" stroke="#8b1a1a" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.5"/>
+          </svg>
+
+          <div class="lux-filter-strip">
+            <div class="lux-filter">
+              <span class="lbl">Loyer max</span>
+              <span class="val">CHF 1<em>'</em>400</span>
+            </div>
+            <div class="lux-filter-divider"></div>
+            <div class="lux-filter">
+              <span class="lbl">Pièces ≥</span>
+              <span class="val"><em>2</em></span>
+            </div>
+            <div class="lux-filter-divider"></div>
+            <div class="lux-filter">
+              <span class="lbl">Surface ≥</span>
+              <span class="val">40 <em>m²</em></span>
+            </div>
+            <div class="lux-filter-divider"></div>
+            <div class="lux-filter">
+              <span class="lbl">Statut</span>
+              <span class="val">À contacter</span>
+            </div>
+            <div class="lux-filter-divider"></div>
+            <div class="lux-filter">
+              <span class="lbl">Sources</span>
+              <span class="val">6 sur 7</span>
+            </div>
+            <button class="lux-cta">Affiner →</button>
+          </div>
+        </div>
+
+        <aside class="lux-aside">
+          <h2>La sélection</h2>
+          <p class="lede">Des 80 logements répertoriés cette semaine</p>
+
+          <div class="lux-piece">
+            <div class="lux-piece-no">№ 01 · Priorité A</div>
+            <h3>Un 2.5 pièces baigné de lumière, sur les hauts de Lausanne</h3>
+            <div class="lux-piece-grid">
+              <div>
+                <div class="meta">Av. de Cour 88, 1007 Lausanne · 62 m² · 12 min en TPL</div>
+                <div class="lux-piece-tags">
+                  <span>Vue lac</span><span>Régie directe</span><span>Score 84/100</span>
+                </div>
+              </div>
+              <div class="lux-piece-img"></div>
+            </div>
+            <div class="lux-piece-price" style="margin-top:8px;">
+              CHF 1'380<small>charges incl.</small>
+            </div>
+          </div>
+
+          <div class="lux-piece">
+            <div class="lux-piece-no">№ 02 · Priorité A</div>
+            <h3>Trois pièces sous les combles, ruelle Pichard</h3>
+            <div class="lux-piece-grid">
+              <div>
+                <div class="meta">Rue Pichard 12, 1003 · 71 m² · 6 min</div>
+                <div class="lux-piece-tags">
+                  <span>Direct régie</span><span>Cachet</span><span>Score 81</span>
+                </div>
+              </div>
+              <div class="lux-piece-img" style="background: linear-gradient(135deg, #c9a87a, #6e4c2a);"></div>
+            </div>
+            <div class="lux-piece-price" style="margin-top:8px;">
+              CHF 1'410<small>charges incl.</small>
+            </div>
+          </div>
+
+          <div class="lux-piece">
+            <div class="lux-piece-no">№ 03</div>
+            <h3>Studio rénové à Pully, calme et verdoyant</h3>
+            <div class="lux-piece-grid">
+              <div>
+                <div class="meta">Ch. de la Vallombreuse 4 · 38 m² · 18 min</div>
+                <div class="lux-piece-tags">
+                  <span>Nouveau</span><span>Score 71</span>
+                </div>
+              </div>
+              <div class="lux-piece-img" style="background: linear-gradient(135deg, #a8b8a4, #5a6e54);"></div>
+            </div>
+            <div class="lux-piece-price" style="margin-top:8px;">
+              CHF 1'280<small>charges incl.</small>
+            </div>
+          </div>
+
+          <div class="lux-piece">
+            <div class="lux-piece-no">№ 04</div>
+            <h3>Deux pièces lumineux à Renens-Centre</h3>
+            <div class="lux-piece-grid">
+              <div>
+                <div class="meta">Rue de Lausanne 24 · 54 m² · 22 min</div>
+                <div class="lux-piece-tags">
+                  <span>Score 68</span>
+                </div>
+              </div>
+              <div class="lux-piece-img" style="background: linear-gradient(135deg, #c9b8a4, #8e6e54);"></div>
+            </div>
+            <div class="lux-piece-price" style="margin-top:8px;">
+              CHF 1'195<small>charges incl.</small>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ========== MOCKUP 4 · HELVETIA.GRID ========== -->
+    <section class="mockup-panel" data-i="4">
+      <div class="cyber">
+        <div class="cyber-grid-bg"></div>
+
+        <header class="cyber-header">
+          <div class="cyber-logo">HELVETIA.GRID</div>
+          <div class="cyber-bread">
+            ROOT / PROFILE: <span>LAUSANNE.2P</span> / SCAN_T+11M / <span class="blink">ACQUIRING</span>
+          </div>
+          <div class="cyber-status">
+            <div class="item"><span class="lbl">TGT_FOUND</span><span class="v">080</span></div>
+            <div class="item"><span class="lbl">PRI_A</span><span class="v warn">07</span></div>
+            <div class="item"><span class="lbl">NEW_24H</span><span class="v ok">+04</span></div>
+            <div class="item"><span class="lbl">UPLINK</span><span class="v ok">●●●</span></div>
+          </div>
+        </header>
+
+        <aside class="cyber-side-left">
+          <div class="cyber-panel-head">PARAM.QUERY <span class="led"></span></div>
+
+          <div class="cyber-section">
+            <div class="cyber-section-lbl">BUDGET <span class="v">CHF 0–1400</span></div>
+            <div class="cyber-input-row">
+              <input class="cyber-input" value="0">
+              <input class="cyber-input" value="1400">
+            </div>
+          </div>
+
+          <div class="cyber-section">
+            <div class="cyber-section-lbl">ROOMS <span class="v">≥ 2.0</span></div>
+            <div class="cyber-pill-list">
+              <button class="cyber-pill">1.5</button>
+              <button class="cyber-pill on">2.0</button>
+              <button class="cyber-pill">2.5</button>
+              <button class="cyber-pill">3.0</button>
+              <button class="cyber-pill">3.5+</button>
+            </div>
+          </div>
+
+          <div class="cyber-section">
+            <div class="cyber-section-lbl">SURFACE_M2 <span class="v">≥ 40</span></div>
+            <div class="cyber-input-row">
+              <input class="cyber-input" value="40">
+              <input class="cyber-input" value="—">
+            </div>
+          </div>
+
+          <div class="cyber-section">
+            <div class="cyber-section-lbl">FLAGS</div>
+            <div class="cyber-pill-list">
+              <button class="cyber-pill on">DIRECT_RÉGIE</button>
+              <button class="cyber-pill on">NEW</button>
+              <button class="cyber-pill danger">URGENT</button>
+              <button class="cyber-pill">PINNED</button>
+            </div>
+          </div>
+
+          <div class="cyber-section">
+            <div class="cyber-section-lbl">FEEDS <span class="v">6/7</span></div>
+            <div class="cyber-source-row"><span class="name">immobilier.ch</span><span class="count">38</span><span class="toggle"></span></div>
+            <div class="cyber-source-row"><span class="name">flatfox.ch</span><span class="count">22</span><span class="toggle"></span></div>
+            <div class="cyber-source-row"><span class="name">naef.ch</span><span class="count">09</span><span class="toggle"></span></div>
+            <div class="cyber-source-row"><span class="name">b-nicod.ch</span><span class="count">07</span><span class="toggle"></span></div>
+            <div class="cyber-source-row"><span class="name">retraites-pop</span><span class="count">04</span><span class="toggle"></span></div>
+            <div class="cyber-source-row off"><span class="name">anibis.ch</span><span class="count">12</span><span class="toggle"></span></div>
+          </div>
+
+          <div class="cyber-section">
+            <div class="cyber-section-lbl">STATUS_PIPE</div>
+            <div class="cyber-pill-list">
+              <button class="cyber-pill on">CONTACT</button>
+              <button class="cyber-pill">VISITE</button>
+              <button class="cyber-pill">DOSSIER</button>
+              <button class="cyber-pill">RELANCE</button>
+            </div>
+          </div>
+        </aside>
+
+        <main class="cyber-map-wrap">
+          <span class="cyber-corner tl"></span>
+          <span class="cyber-corner tr"></span>
+          <span class="cyber-corner bl"></span>
+          <span class="cyber-corner br"></span>
+
+          <svg viewBox="0 0 900 500" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id="cy-glow">
+                <stop offset="0%" stop-color="#00e6e6" stop-opacity="0.4"/>
+                <stop offset="100%" stop-color="#00e6e6" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="cy-glow-pink">
+                <stop offset="0%" stop-color="#ff0099" stop-opacity="0.4"/>
+                <stop offset="100%" stop-color="#ff0099" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+
+            <polygon points="120,200 240,180 350,170 480,160 600,180 720,200 780,260 760,330 680,360 560,370 440,360 320,370 200,350 130,310 100,260"
+              fill="rgba(0,230,230,0.05)" stroke="#00e6e6" stroke-width="1" opacity="0.7"/>
+
+            <g stroke="rgba(0,230,230,0.2)" stroke-width="0.5" stroke-dasharray="4,4">
+              <line x1="240" y1="170" x2="240" y2="370"/>
+              <line x1="360" y1="160" x2="360" y2="370"/>
+              <line x1="480" y1="160" x2="480" y2="370"/>
+              <line x1="600" y1="170" x2="600" y2="370"/>
+              <line x1="100" y1="260" x2="780" y2="260"/>
+            </g>
+
+            <circle cx="290" cy="320" r="60" fill="url(#cy-glow)"/>
+            <circle cx="540" cy="240" r="50" fill="url(#cy-glow-pink)"/>
+
+            <polygon points="220,330 320,322 360,335 330,355 250,355 215,345" fill="#0a1428" stroke="#00e6e6" stroke-width="0.6"/>
+            <polygon points="430,265 490,260 520,275 500,290 440,288 422,275" fill="#0a1428" stroke="#00e6e6" stroke-width="0.6"/>
+
+            <g font-family="Share Tech Mono" font-size="10" fill="#00e6e6" opacity="0.7">
+              <text x="160" y="200">SEC.01</text>
+              <text x="280" y="200">SEC.02</text>
+              <text x="400" y="200">SEC.03</text>
+              <text x="520" y="200">SEC.04</text>
+              <text x="640" y="200">SEC.05</text>
+            </g>
+            <g font-family="Rajdhani" font-size="13" font-weight="600" fill="#d8f4ff">
+              <text x="280" y="345">LAUSANNE</text>
+              <text x="180" y="350">GENÈVE</text>
+              <text x="450" y="278">BERNE</text>
+              <text x="600" y="240">ZÜRICH</text>
+            </g>
+
+            <g class="cyber-marker priority">
+              <circle cx="290" cy="332" r="12" fill="rgba(255,0,153,0.2)" stroke="#ff0099" stroke-width="1"/>
+              <circle cx="290" cy="332" r="4"/>
+            </g>
+            <g class="cyber-marker">
+              <circle cx="310" cy="328" r="3"/>
+            </g>
+            <g class="cyber-marker">
+              <circle cx="270" cy="340" r="3"/>
+            </g>
+            <g class="cyber-marker">
+              <circle cx="245" cy="342" r="3"/>
+            </g>
+            <g class="cyber-marker priority">
+              <circle cx="320" cy="340" r="4"/>
+            </g>
+            <g class="cyber-marker">
+              <circle cx="190" cy="345" r="3"/>
+            </g>
+            <g class="cyber-marker">
+              <circle cx="220" cy="350" r="3"/>
+            </g>
+            <g class="cyber-marker priority">
+              <circle cx="450" cy="265" r="4"/>
+            </g>
+            <g class="cyber-marker">
+              <circle cx="475" cy="272" r="3"/>
+            </g>
+            <g class="cyber-marker">
+              <circle cx="495" cy="278" r="3"/>
+            </g>
+            <g class="cyber-marker">
+              <circle cx="600" cy="232" r="3"/>
+            </g>
+            <g class="cyber-marker">
+              <circle cx="625" cy="240" r="3"/>
+            </g>
+
+            <g stroke="#ff0099" stroke-width="1" fill="none">
+              <circle cx="290" cy="332" r="22" stroke-dasharray="4,4"/>
+              <line x1="270" y1="332" x2="280" y2="332"/>
+              <line x1="300" y1="332" x2="310" y2="332"/>
+              <line x1="290" y1="312" x2="290" y2="322"/>
+              <line x1="290" y1="342" x2="290" y2="352"/>
+            </g>
+
+            <line x1="290" y1="332" x2="800" y2="450" stroke="#ff0099" stroke-width="0.5" stroke-dasharray="3,2" opacity="0.5"/>
+
+            <g font-family="Share Tech Mono" font-size="9" fill="#6da4a8">
+              <text x="14" y="20">LAT_46.5198</text>
+              <text x="14" y="32">LON_06.6335</text>
+              <text x="14" y="488">SCALE 1:200K</text>
+            </g>
+          </svg>
+        </main>
+
+        <aside class="cyber-side-right">
+          <div class="cyber-panel-head">TARGETS.RANKED <span style="font-family:'Share Tech Mono';font-size:10px;color:#ff0099;">[80]</span></div>
+
+          <div class="cyber-target priority">
+            <div class="cyber-target-row1"><span class="id">#01 · ID_LSN_4421</span><span class="score-v">SCORE 84</span></div>
+            <h4>2.5P · Av. de Cour 88</h4>
+            <div class="addr">1007 LAUSANNE · LAT 46.519 · LON 06.633</div>
+            <div class="cyber-target-grid">
+              <div class="cell"><span class="lbl">RENT</span><span class="v">1380</span></div>
+              <div class="cell"><span class="lbl">SURF</span><span class="v">62m²</span></div>
+              <div class="cell"><span class="lbl">ETA</span><span class="v">12'</span></div>
+            </div>
+            <div class="cyber-target-actions">
+              <button>PIN</button>
+              <button>CONTACT</button>
+              <button class="go">DETAIL ▶</button>
+            </div>
+          </div>
+
+          <div class="cyber-target priority">
+            <div class="cyber-target-row1"><span class="id">#02 · ID_LSN_4438</span><span class="score-v">SCORE 81</span></div>
+            <h4>3.0P · Rue Pichard 12</h4>
+            <div class="addr">1003 LAUSANNE · DIRECT_RÉGIE</div>
+            <div class="cyber-target-grid">
+              <div class="cell"><span class="lbl">RENT</span><span class="v">1410</span></div>
+              <div class="cell"><span class="lbl">SURF</span><span class="v">71m²</span></div>
+              <div class="cell"><span class="lbl">ETA</span><span class="v">06'</span></div>
+            </div>
+            <div class="cyber-target-actions">
+              <button>PIN</button>
+              <button>CONTACT</button>
+              <button class="go">DETAIL ▶</button>
+            </div>
+          </div>
+
+          <div class="cyber-target">
+            <div class="cyber-target-row1"><span class="id">#03 · ID_PUL_2210</span><span class="score-v" style="color:#00e6e6;">SCORE 71</span></div>
+            <h4>1.5P · Ch. Vallombreuse 4</h4>
+            <div class="addr">1009 PULLY · NEW_T-3H</div>
+            <div class="cyber-target-grid">
+              <div class="cell"><span class="lbl">RENT</span><span class="v">1280</span></div>
+              <div class="cell"><span class="lbl">SURF</span><span class="v">38m²</span></div>
+              <div class="cell"><span class="lbl">ETA</span><span class="v">18'</span></div>
+            </div>
+            <div class="cyber-target-actions">
+              <button>PIN</button>
+              <button>CONTACT</button>
+              <button class="go">DETAIL ▶</button>
+            </div>
+          </div>
+
+          <div class="cyber-target">
+            <div class="cyber-target-row1"><span class="id">#04 · ID_REN_8821</span><span class="score-v" style="color:#00e6e6;">SCORE 68</span></div>
+            <h4>2.0P · Rue de Lausanne 24</h4>
+            <div class="addr">1020 RENENS · STD</div>
+            <div class="cyber-target-grid">
+              <div class="cell"><span class="lbl">RENT</span><span class="v">1195</span></div>
+              <div class="cell"><span class="lbl">SURF</span><span class="v">54m²</span></div>
+              <div class="cell"><span class="lbl">ETA</span><span class="v">22'</span></div>
+            </div>
+            <div class="cyber-target-actions">
+              <button>PIN</button>
+              <button>CONTACT</button>
+              <button class="go">DETAIL ▶</button>
+            </div>
+          </div>
+        </aside>
+
+        <footer class="cyber-bottom">
+          <div>
+            <h5>SCAN.STATUS</h5>
+            <div class="cyber-bigstat">11<small>MIN AGO</small></div>
+          </div>
+          <div>
+            <h5>SOURCE.DIST</h5>
+            <div class="cyber-bars">
+              <div class="cyber-bar-row"><span class="lbl">IMMOBLR</span><div class="cyber-bar-track"><div class="fill" style="width:80%"></div></div><span class="v">38</span></div>
+              <div class="cyber-bar-row"><span class="lbl">FLATFOX</span><div class="cyber-bar-track"><div class="fill" style="width:50%"></div></div><span class="v">22</span></div>
+              <div class="cyber-bar-row"><span class="lbl">NAEF</span><div class="cyber-bar-track"><div class="fill" style="width:25%"></div></div><span class="v">09</span></div>
+              <div class="cyber-bar-row"><span class="lbl">B-NICOD</span><div class="cyber-bar-track"><div class="fill" style="width:18%"></div></div><span class="v">07</span></div>
+              <div class="cyber-bar-row"><span class="lbl">RP</span><div class="cyber-bar-track"><div class="fill" style="width:12%"></div></div><span class="v">04</span></div>
+            </div>
+          </div>
+          <div>
+            <h5>STATUS.PIPELINE</h5>
+            <div class="cyber-pipeline">
+              <div class="cyber-stage"><span class="name">Contact</span><span class="v">52</span><span class="delta">+04</span></div>
+              <div class="cyber-stage"><span class="name">Visite</span><span class="v">14</span><span class="delta">+02</span></div>
+              <div class="cyber-stage"><span class="name">Dossier</span><span class="v">06</span><span class="delta">+01</span></div>
+              <div class="cyber-stage alert"><span class="name">Relance</span><span class="v">03</span><span class="delta neg">!</span></div>
+              <div class="cyber-stage"><span class="name">Accepté</span><span class="v">01</span><span class="delta">·</span></div>
+              <div class="cyber-stage"><span class="name">Refusé</span><span class="v">02</span><span class="delta neg">-</span></div>
+              <div class="cyber-stage"><span class="name">SansRép</span><span class="v">02</span><span class="delta">·</span></div>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </section>
+
+    <!-- ========== MOCKUP 5 · NICHÉE ========== -->
+    <section class="mockup-panel" data-i="5">
+      <div class="organic">
+        <header class="organic-header">
+          <div class="organic-logo">
+            <span class="leaf"></span> Nichée
+          </div>
+          <input class="organic-search" placeholder="Chercher une rue, un quartier, une commune…">
+          <div class="organic-account-row">
+            <button class="organic-pill-link">Mes annonces</button>
+            <button class="organic-pill-link">Profils</button>
+            <div class="organic-avatar">S</div>
+          </div>
+        </header>
+
+        <div class="organic-grid">
+
+          <div class="organic-map-card">
+            <div class="organic-map-head">
+              <h2>Là où vous pourriez <em>poser vos valises</em></h2>
+              <div class="organic-map-toggle">
+                <button class="on">Carte</button>
+                <button>Liste</button>
+              </div>
+            </div>
+
+            <div class="organic-map">
+              <svg viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <radialGradient id="org-water">
+                    <stop offset="0%" stop-color="#a8c4d4" stop-opacity="0.7"/>
+                    <stop offset="100%" stop-color="#7a9eaa" stop-opacity="0.9"/>
+                  </radialGradient>
+                  <linearGradient id="org-leaf" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stop-color="#7fa074"/>
+                    <stop offset="100%" stop-color="#4a5a3a"/>
+                  </linearGradient>
+                  <linearGradient id="org-leaf-coral" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stop-color="#e09078"/>
+                    <stop offset="100%" stop-color="#a85842"/>
+                  </linearGradient>
+                </defs>
+
+                <g opacity="0.4">
+                  <ellipse cx="200" cy="200" rx="180" ry="80" fill="#7fa074" opacity="0.3"/>
+                  <ellipse cx="500" cy="180" rx="200" ry="90" fill="#a8b894" opacity="0.4"/>
+                  <ellipse cx="800" cy="220" rx="170" ry="85" fill="#7fa074" opacity="0.3"/>
+                </g>
+                <g opacity="0.3">
+                  <ellipse cx="300" cy="350" rx="160" ry="70" fill="#d4a86c"/>
+                  <ellipse cx="700" cy="370" rx="180" ry="80" fill="#c97b5e"/>
+                </g>
+
+                <path d="M 100 250 Q 200 180 350 200 Q 500 180 650 200 Q 800 180 900 240 Q 950 300 880 380 Q 800 430 650 420 Q 500 430 350 410 Q 200 420 130 360 Q 80 310 100 250 Z"
+                  fill="rgba(255,255,255,0.45)" stroke="rgba(74,90,58,0.4)" stroke-width="2" stroke-dasharray="8,4"/>
+
+                <ellipse cx="280" cy="350" rx="80" ry="20" fill="url(#org-water)"/>
+                <ellipse cx="500" cy="280" rx="55" ry="14" fill="url(#org-water)"/>
+
+                <path d="M 200 250 Q 280 300 350 350" fill="none" stroke="#a8c4d4" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+                <path d="M 500 290 Q 580 310 650 280" fill="none" stroke="#a8c4d4" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+
+                <g font-family="Caveat" font-size="22" fill="#2f3e2c" font-weight="700">
+                  <text x="245" y="345">Lausanne</text>
+                  <text x="160" y="362">Genève</text>
+                  <text x="490" y="265">Berne</text>
+                  <text x="660" y="240">Zurich</text>
+                </g>
+
+                <g class="organic-marker">
+                  <g class="leaf-shape" transform="translate(245 335)">
+                    <path d="M 0 -20 Q -14 -8 -8 6 Q 0 12 8 6 Q 14 -8 0 -20 Z" fill="url(#org-leaf-coral)" stroke="#fff" stroke-width="1.5"/>
+                    <circle cx="0" cy="-5" r="4" fill="#fff"/>
+                    <text y="-2" text-anchor="middle" font-family="DM Serif Display" font-size="7" fill="#a85842" font-weight="700">1</text>
+                  </g>
+                </g>
+                <g class="organic-marker">
+                  <g class="leaf-shape" transform="translate(275 340)">
+                    <path d="M 0 -16 Q -10 -6 -6 4 Q 0 10 6 4 Q 10 -6 0 -16 Z" fill="url(#org-leaf)" stroke="#fff" stroke-width="1.5"/>
+                  </g>
+                </g>
+                <g class="organic-marker">
+                  <g class="leaf-shape" transform="translate(225 345)">
+                    <path d="M 0 -16 Q -10 -6 -6 4 Q 0 10 6 4 Q 10 -6 0 -16 Z" fill="url(#org-leaf)" stroke="#fff" stroke-width="1.5"/>
+                  </g>
+                </g>
+                <g class="organic-marker">
+                  <g class="leaf-shape" transform="translate(195 358)">
+                    <path d="M 0 -16 Q -10 -6 -6 4 Q 0 10 6 4 Q 10 -6 0 -16 Z" fill="url(#org-leaf)" stroke="#fff" stroke-width="1.5"/>
+                  </g>
+                </g>
+                <g class="organic-marker">
+                  <g class="leaf-shape" transform="translate(310 320)">
+                    <path d="M 0 -18 Q -12 -7 -7 5 Q 0 11 7 5 Q 12 -7 0 -18 Z" fill="url(#org-leaf-coral)" stroke="#fff" stroke-width="1.5"/>
+                    <circle cx="0" cy="-5" r="4" fill="#fff"/>
+                    <text y="-2" text-anchor="middle" font-family="DM Serif Display" font-size="7" fill="#a85842" font-weight="700">2</text>
+                  </g>
+                </g>
+                <g class="organic-marker">
+                  <g class="leaf-shape" transform="translate(155 365)">
+                    <path d="M 0 -16 Q -10 -6 -6 4 Q 0 10 6 4 Q 10 -6 0 -16 Z" fill="url(#org-leaf)" stroke="#fff" stroke-width="1.5"/>
+                  </g>
+                </g>
+                <g class="organic-marker">
+                  <g class="leaf-shape" transform="translate(490 270)">
+                    <path d="M 0 -16 Q -10 -6 -6 4 Q 0 10 6 4 Q 10 -6 0 -16 Z" fill="url(#org-leaf)" stroke="#fff" stroke-width="1.5"/>
+                  </g>
+                </g>
+                <g class="organic-marker">
+                  <g class="leaf-shape" transform="translate(525 280)">
+                    <path d="M 0 -16 Q -10 -6 -6 4 Q 0 10 6 4 Q 10 -6 0 -16 Z" fill="url(#org-leaf)" stroke="#fff" stroke-width="1.5"/>
+                  </g>
+                </g>
+                <g class="organic-marker">
+                  <g class="leaf-shape" transform="translate(660 245)">
+                    <path d="M 0 -16 Q -10 -6 -6 4 Q 0 10 6 4 Q 10 -6 0 -16 Z" fill="url(#org-leaf)" stroke="#fff" stroke-width="1.5"/>
+                  </g>
+                </g>
+                <g class="organic-marker">
+                  <g class="leaf-shape" transform="translate(685 260)">
+                    <path d="M 0 -16 Q -10 -6 -6 4 Q 0 10 6 4 Q 10 -6 0 -16 Z" fill="url(#org-leaf)" stroke="#fff" stroke-width="1.5"/>
+                  </g>
+                </g>
+
+                <g opacity="0.4">
+                  <path d="M 60 80 Q 50 60 70 50 Q 80 70 60 80 Z" fill="#7fa074"/>
+                  <path d="M 920 100 Q 910 80 930 70 Q 940 90 920 100 Z" fill="#c97b5e"/>
+                  <path d="M 80 460 Q 70 440 90 430 Q 100 450 80 460 Z" fill="#7fa074"/>
+                </g>
+              </svg>
+
+              <div class="organic-filter-cluster">
+                <button class="organic-chip-soft active">
+                  <span class="ico">CHF</span> Loyer max <small>1'400</small>
+                </button>
+                <button class="organic-chip-soft active">
+                  <span class="ico">⌂</span> 2 pièces <small>min</small>
+                </button>
+                <button class="organic-chip-soft">
+                  <span class="ico">⊞</span> Surface
+                </button>
+                <button class="organic-chip-soft">
+                  <span class="ico">✿</span> Verdure
+                </button>
+                <button class="organic-chip-soft">
+                  <span class="ico">↺</span> 15 min vélo
+                </button>
+                <button class="organic-chip-soft">
+                  <span class="ico">+</span> Plus de filtres
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <aside class="organic-aside">
+            <div class="organic-card">
+              <h3>Aujourd'hui <span class="pill">+ 4 nouvelles</span></h3>
+              <div class="organic-stat-row">
+                <span class="lbl">Annonces visibles</span>
+                <span class="v">80 <em>↗</em></span>
+              </div>
+              <div class="organic-stat-row">
+                <span class="lbl">Coups de cœur</span>
+                <span class="v">7 priorité A</span>
+              </div>
+              <div class="organic-stat-row">
+                <span class="lbl">À relancer</span>
+                <span class="v">3 <em>!</em></span>
+              </div>
+              <div class="organic-stat-row">
+                <span class="lbl">Dernier scan</span>
+                <span class="v">il y a 11 min</span>
+              </div>
+            </div>
+
+            <div class="organic-card organic-listings-card">
+              <h3>Sélection du jour <span class="pill">voir tout →</span></h3>
+              <div class="organic-listing">
+                <div class="organic-listing-img" data-num="1"></div>
+                <div class="organic-listing-info">
+                  <span class="price">CHF 1'380</span>
+                  <span class="title">2.5 pièces · Lausanne-Sud</span>
+                  <span class="meta">Av. de Cour 88 · 62m² · <em>12 min ☀</em></span>
+                </div>
+              </div>
+              <div class="organic-listing">
+                <div class="organic-listing-img b2" data-num="2"></div>
+                <div class="organic-listing-info">
+                  <span class="price">CHF 1'410</span>
+                  <span class="title">3p sous-toit · Pichard</span>
+                  <span class="meta">1003 Lausanne · 71m² · <em>direct régie</em></span>
+                </div>
+              </div>
+              <div class="organic-listing">
+                <div class="organic-listing-img b3" data-num="3"></div>
+                <div class="organic-listing-info">
+                  <span class="price">CHF 1'280</span>
+                  <span class="title">Studio · Pully</span>
+                  <span class="meta">Vallombreuse 4 · 38m² · <em>nouveau</em></span>
+                </div>
+              </div>
+              <div class="organic-listing">
+                <div class="organic-listing-img b4" data-num="4"></div>
+                <div class="organic-listing-info">
+                  <span class="price">CHF 1'195</span>
+                  <span class="title">2p · Renens-Centre</span>
+                  <span class="meta">Rue de Lausanne · 54m²</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer class="gallery-footer">
+    <div>
+      <span class="desc-title" id="desc-title">Swiss Precision —</span><span id="desc-body">A red/black/white grid that lets the map breathe. Slim filter sidebar on the left, vertical listing rail on the right, status bar locking the bottom. Maximum signal, zero ornament.</span>
+    </div>
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center; color:#71717a;">
+      <span class="kbd">←</span><span class="kbd">→</span> navigate · <span class="kbd">1</span>–<span class="kbd">5</span> jump
+    </div>
+  </footer>
+
+</div>
+
+<script>
+const concepts = [
+  {
+    name: '01 · Swiss Precision',
+    tag: 'Swiss / Editorial Grid',
+    title: 'Swiss Precision —',
+    body: ' A red/black/white grid that lets the map breathe. Slim filter sidebar on the left, vertical listing rail on the right, status bar locking the bottom. Maximum signal, zero ornament — built around the principle that every pixel must justify itself.'
+  },
+  {
+    name: '02 · Brutal Console',
+    tag: 'Brutalist / Anti-design',
+    title: 'Brutal Console —',
+    body: ' Full-bleed dark map with raw monospace overlays. Filters are floating concrete slabs you can dismiss; listings dock as a horizontal strip drawer; stats hang in a stark black box. Anti-polish, all signal — for users who want the data to scream.'
+  },
+  {
+    name: "03 · Atelier des Toits",
+    tag: 'Editorial / Luxury Magazine',
+    title: 'Atelier des Toits —',
+    body: ' A magazine spread for housing. Cream paper, hand-drawn topography, Cormorant italics, gold-leaf compass rose. Filters condense into a single elegant strip below the map. Listings become numbered editorial pieces — turning apartment hunting into a curated weekly issue.'
+  },
+  {
+    name: '04 · Helvetia.Grid',
+    tag: 'Cyberpunk / Mission Control',
+    title: 'Helvetia.Grid —',
+    body: ' A tactical command HUD. The map is a glowing radar overlaid with sectors, neon coordinates, targeting reticles. Filters become parameter inputs, listings become "targets ranked", status pipeline becomes a live telemetry strip. For users who want to feel like the apartment hunt is a mission.'
+  },
+  {
+    name: '05 · Nichée',
+    tag: 'Biophilic / Soft & Calm',
+    title: 'Nichée —',
+    body: ' Cream and sage with handwritten Caveat accents and leaf-shaped map pins. The map sits as a rounded "garden card", filters are floating soft chips along the bottom, listings are intimate vignettes on the right. Calming, human, friendly — like browsing a gardening notebook instead of a database.'
+  }
+];
+
+const slider = document.getElementById('concept-slider');
+const panels = document.querySelectorAll('.mockup-panel');
+const dots = document.querySelectorAll('.dot');
+const nameLabel = document.getElementById('concept-name-label');
+const tagLabel = document.getElementById('concept-tag-label');
+const descTitle = document.getElementById('desc-title');
+const descBody = document.getElementById('desc-body');
+const prevBtn = document.getElementById('prev-btn');
+const nextBtn = document.getElementById('next-btn');
+
+function setConcept(i) {
+  i = Math.max(1, Math.min(5, +i));
+  slider.value = i;
+  panels.forEach(p => p.classList.toggle('active', +p.dataset.i === i));
+  dots.forEach(d => d.classList.toggle('active', +d.dataset.i === i));
+  nameLabel.textContent = concepts[i-1].name;
+  tagLabel.textContent = concepts[i-1].tag;
+  descTitle.textContent = concepts[i-1].title;
+  descBody.textContent = concepts[i-1].body;
+  prevBtn.disabled = i === 1;
+  nextBtn.disabled = i === 5;
+}
+
+slider.addEventListener('input', e => setConcept(e.target.value));
+dots.forEach(d => d.addEventListener('click', () => setConcept(d.dataset.i)));
+prevBtn.addEventListener('click', () => setConcept(+slider.value - 1));
+nextBtn.addEventListener('click', () => setConcept(+slider.value + 1));
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
+  if (e.key === 'ArrowLeft') { setConcept(+slider.value - 1); }
+  else if (e.key === 'ArrowRight') { setConcept(+slider.value + 1); }
+  else if (/^[1-5]$/.test(e.key)) { setConcept(e.key); }
+});
+
+document.querySelectorAll('.swiss-chip, .brutal-tag, .brutal-tab, .cyber-pill, .organic-chip-soft, .swiss-nav button, .lux-nav a, .organic-map-toggle button').forEach(el => {
+  el.addEventListener('click', e => {
+    e.stopPropagation();
+    const siblings = el.parentElement.children;
+    if (el.classList.contains('cyber-pill') || el.classList.contains('brutal-tag')) {
+      el.classList.toggle('on');
+    } else {
+      [...siblings].forEach(s => s.classList.remove('on', 'active'));
+      el.classList.add(el.classList.contains('organic-chip-soft') ? 'active' : 'on');
+    }
+  });
+});
+
+document.querySelectorAll('.cyber-source-row').forEach(r => {
+  r.addEventListener('click', () => r.classList.toggle('off'));
+});
+</script>
+</body>
+</html>

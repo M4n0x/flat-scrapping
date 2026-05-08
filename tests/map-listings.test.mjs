@@ -152,7 +152,7 @@ test('resolveListingCoordinates ignores invalid coordinate types and ranges', ()
   );
 });
 
-test('buildMapListingsPayload includes only active displayed non-refused listings with coordinates', async () => {
+test('buildMapListingsPayload includes every active displayed listing with coordinates regardless of status', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'apartment-map-'));
   const profilesDir = path.join(root, 'profiles');
 
@@ -170,7 +170,7 @@ test('buildMapListingsPayload includes only active displayed non-refused listing
           id: 'active',
           active: true,
           display: true,
-          status: 'À contacter',
+          status: 'sorting',
           title: 'Appartement actif',
           address: 'Rue Active 1, 1800 Vevey',
           area: 'Vevey',
@@ -181,17 +181,10 @@ test('buildMapListingsPayload includes only active displayed non-refused listing
           url: 'https://example.test/active'
         },
         {
-          id: 'removed',
-          active: false,
-          display: true,
-          isRemoved: true,
-          address: 'Rue Removed 1, 1800 Vevey'
-        },
-        {
           id: 'refused',
           active: true,
           display: true,
-          status: 'Refusé',
+          status: 'archived',
           mapLat: 46.47,
           mapLon: 6.85,
           address: 'Rue Refused 1, 1800 Vevey'
@@ -200,13 +193,13 @@ test('buildMapListingsPayload includes only active displayed non-refused listing
           id: 'missing-coords',
           active: true,
           display: true,
-          status: 'À contacter',
+          status: 'sorting',
           address: 'Rue Missing 1, 1800 Vevey'
         },
         {
           id: 'missing-active',
           display: true,
-          status: 'À contacter',
+          status: 'sorting',
           mapLat: 46.48,
           mapLon: 6.86,
           address: 'Rue Missing Active 1, 1800 Vevey'
@@ -215,7 +208,7 @@ test('buildMapListingsPayload includes only active displayed non-refused listing
           id: 'active-false-visible',
           active: false,
           display: true,
-          status: 'À contacter',
+          status: 'sorting',
           mapLat: 46.49,
           mapLon: 6.87,
           address: 'Rue Active False 1, 1800 Vevey'
@@ -224,7 +217,7 @@ test('buildMapListingsPayload includes only active displayed non-refused listing
           id: 'refused-whitespace',
           active: true,
           display: true,
-          status: ' Refusé ',
+          status: ' archived ',
           mapLat: 46.5,
           mapLon: 6.88,
           address: 'Rue Refused Whitespace 1, 1800 Vevey'
@@ -236,18 +229,19 @@ test('buildMapListingsPayload includes only active displayed non-refused listing
 
     assert.equal(payload.profiles.length, 1);
     assert.equal(payload.profiles[0].slug, 'vevey');
-    assert.equal(payload.profiles[0].totalActiveDisplayed, 2);
-    assert.equal(payload.profiles[0].mappedCount, 1);
+    assert.equal(payload.profiles[0].totalActiveDisplayed, 4);
+    assert.equal(payload.profiles[0].mappedCount, 3);
     assert.equal(payload.profiles[0].missingCoordinates, 1);
-    assert.equal(payload.listings.length, 1);
-    assert.equal(payload.listings[0].id, 'active');
+    assert.equal(payload.listings.length, 3);
     assert.equal(payload.listings[0].profileSlug, 'vevey');
     assert.equal(payload.listings[0].lat, 46.46);
     assert.equal(payload.listings[0].lon, 6.84);
+    assert.equal(payload.listings.find((l) => l.id === 'refused').status, 'archived');
+    assert.equal(payload.listings.find((l) => l.id === 'refused-whitespace').status, ' archived ');
     assert.deepEqual(payload.totals, {
       profiles: 1,
-      activeDisplayed: 2,
-      mapped: 1,
+      activeDisplayed: 4,
+      mapped: 3,
       missingCoordinates: 1
     });
   } finally {
@@ -392,6 +386,45 @@ test('buildMapListingsPayload assigns distinct colors when profile hash colors c
 
     assert.equal(new Set(colors).size, 2);
     assert.deepEqual(new Set(listingColors), new Set(colors));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('buildMapListingsPayload exposes status, priority, score, firstSeenAt, viewedAt', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'apartment-map-fields-'));
+  const profilesDir = path.join(root, 'profiles');
+  try {
+    await writeJson(path.join(profilesDir, 'vevey', 'watch-config.json'), {
+      shortTitle: 'Vevey'
+    });
+    await writeJson(path.join(profilesDir, 'vevey', 'tracker.json'), {
+      schemaVersion: 2,
+      listings: [
+        {
+          id: 'a',
+          active: true,
+          display: true,
+          mapLat: 46.46,
+          mapLon: 6.84,
+          address: 'Rue A 1, 1800 Vevey',
+          status: 'pursuing',
+          priority: 'A',
+          score: 87,
+          firstSeenAt: '2026-04-15T10:00:00.000Z',
+          viewedAt: '2026-04-20T08:00:00.000Z'
+        }
+      ]
+    });
+
+    const payload = await buildMapListingsPayload(profilesDir);
+    const listing = payload.listings[0];
+
+    assert.equal(listing.status, 'pursuing');
+    assert.equal(listing.priority, 'A');
+    assert.equal(listing.score, 87);
+    assert.equal(listing.firstSeenAt, '2026-04-15T10:00:00.000Z');
+    assert.equal(listing.viewedAt, '2026-04-20T08:00:00.000Z');
   } finally {
     await rm(root, { recursive: true, force: true });
   }

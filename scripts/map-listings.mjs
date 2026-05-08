@@ -37,10 +37,26 @@ function fallbackProfileColor(slug, index, usedColors) {
   return `hsl(${hash % 360} 68% ${35 + (index % 25)}%)`;
 }
 
+function isValidProfileColor(value) {
+  if (!value) return false;
+  const v = String(value).trim();
+  if (/^#[0-9a-f]{3}$/i.test(v) || /^#[0-9a-f]{6}$/i.test(v) || /^#[0-9a-f]{8}$/i.test(v)) return true;
+  if (/^hsl\(/i.test(v)) return true;
+  return false;
+}
+
 function assignProfileColors(profiles) {
   const usedColors = new Set();
 
+  // First pass: respect explicit, persisted colors.
+  for (const profile of profiles) {
+    if (isValidProfileColor(profile.color)) usedColors.add(profile.color);
+  }
+
+  // Second pass: assign auto-colors only to profiles that don't have one.
   profiles.forEach((profile, index) => {
+    if (isValidProfileColor(profile.color)) return;
+
     let color = profileColor(profile.slug);
     if (usedColors.has(color)) {
       const preferredIndex = PROFILE_COLORS.indexOf(color);
@@ -147,10 +163,7 @@ export function resolveListingCoordinates(item = {}, geocodeCache = {}) {
 }
 
 function isMapVisibleListing(item = {}) {
-  return item.active === true
-    && item.display !== false
-    && item.isRemoved !== true
-    && String(item.status || '').trim() !== 'Refusé';
+  return item.active === true && item.display !== false;
 }
 
 function compactListing(item, profile, coords) {
@@ -169,7 +182,13 @@ function compactListing(item, profile, coords) {
     url: item.url || '',
     imageUrls: listingImageUrls(item),
     lat: coords.lat,
-    lon: coords.lon
+    lon: coords.lon,
+    status: typeof item.status === 'string' ? item.status : '',
+    priority: typeof item.priority === 'string' ? item.priority : '',
+    score: toNumberOrNull(item.score),
+    firstSeenAt: item.firstSeenAt || null,
+    publishedAt: item.publishedAt || null,
+    viewedAt: item.viewedAt || null
   };
 }
 
@@ -206,7 +225,7 @@ export async function buildMapListingsPayload(profilesDir) {
     const profile = {
       slug,
       title: config.shortTitle || config.name || slug,
-      color: profileColor(slug),
+      color: isValidProfileColor(config.color) ? String(config.color).trim() : null,
       totalActiveDisplayed: 0,
       mappedCount: 0,
       missingCoordinates: 0

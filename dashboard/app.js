@@ -1,1298 +1,576 @@
-const cardsEl = document.getElementById('cards');
-const rowsEl = document.getElementById('rows');
-const mobileRowsEl = document.getElementById('mobile-rows');
-const kanbanEl = document.getElementById('kanban-board');
-const subEl = document.getElementById('sub');
-const refreshBtn = document.getElementById('refresh');
-const scanBtn = document.getElementById('scan');
-const scanOut = document.getElementById('scan-output');
-const filterEl = document.getElementById('priority-filter');
-const sortEl = document.getElementById('sort-by');
-const searchEl = document.getElementById('search-box');
-const tabTableEl = document.getElementById('tab-table');
-const tabKanbanEl = document.getElementById('tab-kanban');
-const panelTableEl = document.getElementById('panel-table');
-const panelKanbanEl = document.getElementById('panel-kanban');
-const heroTitleEl = document.querySelector('.hero h1');
-const zonesEl = document.getElementById('zones');
+import {
+  initMap, setListings, addListing, focusListing, setProfileVisibility,
+  onListingClick, onListingHover, getListing, setSelectedMarker,
+  setEditMode, addEditZone, removeEditZone, setEditColor,
+  onMapBackgroundClick, startLasso, cancelLasso, setLassoStateChangeHandler,
+  fitMapToPoints, getPinMode, setPinMode
+} from '/dashboard/map.js';
+import { applyFilters, defaultFilterState } from '/dashboard/filter-logic.js';
+import { renderProfilesPanel, renderQuickSorts, setPanelsVisible } from '/dashboard/filter-panels.js';
+import {
+  renderListings, highlightRow, markRowAsRead, queueViewed, setHoveredRow,
+  setListingsVisible
+} from '/dashboard/listings-panel.js';
+import { startScan, isScanActive } from '/dashboard/scan.js';
+import { initDetailPanel, openDetailPanel, closeDetailPanel, isDetailFor } from '/dashboard/listing-detail.js';
+import {
+  initProfileEdit, enterEditMode, exitEditMode, isEditing, getEditingSlug,
+  setLassoActive, applyDrawnZones
+} from '/dashboard/profile-edit.js';
 
-const profileSwitcherEl = document.getElementById('profile-switcher');
+const STATE_KEY = 'apartment-ops:filter-state:v1';
 
-const PROFILE = (() => {
-  const parts = window.location.pathname.split('/').filter(Boolean);
-  if (parts.length >= 2 && parts[1] === 'dashboard') return parts[0];
-  return new URLSearchParams(window.location.search).get('profile') || 'fribourg';
-})();
-
-const PROFILE_TITLES = {
-  vevey: 'Vevey et environs',
-  fribourg: 'Fribourg et environs',
-  'saint-maurice': 'Saint-Maurice (VS)'
+const state = {
+  filter: hydrateFilterState(),
+  payload: { profiles: [], listings: [] }
 };
 
-let profileAreasText = '';
+async function bootstrap() {
+  initMap(document.getElementById('map'));
 
-async function loadProfileSwitcher() {
-  try {
-    const res = await fetch('/api/profiles');
-    const { profiles } = await res.json();
-    if (!profileSwitcherEl || !Array.isArray(profiles)) return;
-
-    profileSwitcherEl.innerHTML = '';
-    for (const p of profiles) {
-      const opt = document.createElement('option');
-      opt.value = p.slug;
-      opt.textContent = p.label || p.name;
-      if (p.slug === PROFILE) opt.selected = true;
-      profileSwitcherEl.appendChild(opt);
-    }
-
-    // Update title/zones from profile data
-    const current = profiles.find((p) => p.slug === PROFILE);
-    if (current) {
-      if (heroTitleEl) heroTitleEl.textContent = PROFILE_TITLES[PROFILE] || current.name;
-      profileAreasText = current.areas ? `Zones: ${current.areas}` : '';
-      if (zonesEl) zonesEl.textContent = profileAreasText;
-    }
-
-    // Add "manage" option at the end
-    const manageOpt = document.createElement('option');
-    manageOpt.value = '__manage__';
-    manageOpt.textContent = '⚙ Gérer les profils…';
-    profileSwitcherEl.appendChild(manageOpt);
-
-    profileSwitcherEl.addEventListener('change', () => {
-      const selected = profileSwitcherEl.value;
-      if (selected === '__manage__') {
-        window.location.href = '/';
-        return;
-      }
-      window.location.href = `/${encodeURIComponent(selected)}/dashboard`;
-    });
-  } catch {
-    // Fallback: just show current profile
-    if (profileSwitcherEl) {
-      const opt = document.createElement('option');
-      opt.value = PROFILE;
-      opt.textContent = PROFILE_TITLES[PROFILE] || PROFILE;
-      opt.selected = true;
-      profileSwitcherEl.appendChild(opt);
-    }
-  }
-}
-
-loadProfileSwitcher();
-
-if (heroTitleEl) {
-  heroTitleEl.textContent = PROFILE_TITLES[PROFILE] || `Suivi ${PROFILE}`;
-}
-if (zonesEl) {
-  zonesEl.textContent = profileAreasText;
-}
-if (subEl) {
-  subEl.textContent = `Profil: ${PROFILE} · chargement…`;
-}
-
-function apiUrl(pathname) {
-  const sep = pathname.includes('?') ? '&' : '?';
-  return `${pathname}${sep}profile=${encodeURIComponent(PROFILE)}`;
-}
-
-const DONE_STATUSES = new Set(['Accepté', 'Refusé']);
-const REMOVED_KANBAN_STATUS = 'Retirées';
-
-let statuses = [];
-let allListings = [];
-let latestState = { newCount: 0 };
-let draggedKanbanId = null;
-let scorePopoverEl = null;
-let scorePopoverHideTimer = null;
-let activeScoreTrigger = null;
-let scorePopoverGlobalBound = false;
-let activeCardFilter = 'all';
-
-function money(v) {
-  if (v == null) return 'n/a';
-  return `CHF ${new Intl.NumberFormat('fr-CH').format(v)}`;
-}
-
-function shortWhen(iso) {
-  if (!iso) return 'n/a';
-  return new Date(iso).toLocaleString('fr-CH', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
+  initDetailPanel({ onAction: handleListingAction });
+  initProfileEdit({
+    map: {
+      onEditStart: handleEditStart,
+      onEditEnd: handleEditEnd,
+      onZoneAdded: handleZoneAdded,
+      onZoneRemoved: handleZoneRemoved,
+      onZonesAdded: handleZonesAdded,
+      onColorChange: setEditColor,
+      onLassoStart: () => startLasso(),
+      onLassoCancel: () => cancelLasso()
+    },
+    onStarted: () => rerender(),
+    onSaved: handleProfileSaved,
+    onClosed: handleEditClosed
   });
+
+  setLassoStateChangeHandler((active) => setLassoActive(active));
+
+  bindPinModeToggle();
+
+  onListingClick(handlePinClick);
+  onListingHover(handlePinHover);
+  onMapBackgroundClick(() => {
+    if (!isEditing()) closeDetailPanel();
+  });
+
+  document.getElementById('listings-clear')?.addEventListener('click', clearVisibleListings);
+
+  document.getElementById('scan-button').addEventListener('click', () => {
+    if (isScanActive()) return;
+    const visible = state.payload.profiles.filter((p) => !state.filter.hiddenProfiles.has(p.slug));
+    if (visible.length === 0) {
+      alert('Aucun profil visible.');
+      return;
+    }
+    runScansSequentially(visible.map((p) => p.slug));
+  });
+
+  await refreshAll();
+  applyUrlOverridesAfterPayload();
+  fitMapToVisibleData();
+
+  if (state.payload.profiles.length === 0) {
+    enterEditMode(null);
+  }
+
+  updateSyncPill();
+  setInterval(updateSyncPill, 60 * 1000);
 }
 
-function publishedMeta(item) {
-  const publishedIso = item?.publishedAt;
-  const firstSeenIso = item?.firstSeenAt;
-
-  const parseDays = (iso) => {
-    if (!iso) return null;
-    const ts = new Date(iso).getTime();
-    if (!Number.isFinite(ts)) return null;
-    return Math.max(0, Math.floor((Date.now() - ts) / 86400000));
+function bindPinModeToggle() {
+  const btn = document.getElementById('pinmode-toggle');
+  if (!btn) return;
+  const reflect = () => {
+    const detailed = getPinMode() === 'detailed';
+    btn.setAttribute('aria-pressed', detailed ? 'true' : 'false');
+    btn.title = detailed ? 'Vue compacte' : 'Vue détaillée';
+    const icon = btn.querySelector('i');
+    if (icon) icon.className = detailed ? 'fa-solid fa-tag' : 'fa-solid fa-circle-dot';
   };
-
-  const publishedDays = parseDays(publishedIso);
-  if (publishedDays != null) {
-    return { days: publishedDays, approximate: false, iso: publishedIso };
-  }
-
-  const discoveredDays = parseDays(firstSeenIso);
-  if (discoveredDays != null) {
-    return { days: discoveredDays, approximate: true, iso: firstSeenIso };
-  }
-
-  return { days: null, approximate: false, iso: null };
-}
-
-function publishedLabel(item) {
-  const meta = publishedMeta(item);
-  if (meta.days == null) return 'N/A';
-  return meta.approximate ? `${meta.days} j*` : `${meta.days} j`;
-}
-
-function publishedTitle(item) {
-  const meta = publishedMeta(item);
-  if (meta.days == null) return 'Date de parution indisponible';
-  if (meta.approximate) return `Découverte le ${shortWhen(meta.iso)} (estimation)`;
-  return `Publié le ${shortWhen(meta.iso)}`;
-}
-
-function distanceLabel(item) {
-  if (item.distanceKm != null && Number.isFinite(Number(item.distanceKm))) {
-    return `${Number(item.distanceKm).toFixed(1)} km`;
-  }
-  if (item.distanceText) return String(item.distanceText);
-  return 'n/a';
-}
-
-function distanceBadge(item) {
-  const span = document.createElement('span');
-  span.className = 'distance-chip';
-  span.textContent = distanceLabel(item);
-  span.title = item.distanceFromWorkAddress
-    ? `Distance estimée à vol d'oiseau depuis ${item.distanceFromWorkAddress}`
-    : "Distance estimée à vol d'oiseau depuis le lieu de travail";
-  return span;
-}
-
-function travelMinutesLabel(item, mode) {
-  const minutes = mode === 'drive' ? item.driveMinutes : item.transitMinutes;
-  const text = mode === 'drive' ? item.driveText : item.transitText;
-
-  if (minutes != null && Number.isFinite(Number(minutes))) {
-    return `${Math.round(Number(minutes))} min`;
-  }
-
-  if (text) return String(text);
-  return 'n/a';
-}
-
-function createTravelCell(item) {
-  const wrap = document.createElement('div');
-  wrap.className = 'travel-cell';
-
-  wrap.appendChild(distanceBadge(item));
-
-  const lines = document.createElement('div');
-  lines.className = 'travel-lines';
-  lines.innerHTML = `
-    <span>🚗 ${travelMinutesLabel(item, 'drive')}</span>
-    <span>🚌 ${travelMinutesLabel(item, 'transit')}</span>
-  `;
-
-  wrap.appendChild(lines);
-  return wrap;
-}
-
-function travelInlineLabel(item) {
-  return `Travail: ${distanceLabel(item)} · 🚗 ${travelMinutesLabel(item, 'drive')} · 🚌 ${travelMinutesLabel(item, 'transit')}`;
-}
-
-function card(label, value, key = 'all') {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'card card-filter';
-  if (activeCardFilter === key) button.classList.add('active');
-
-  button.innerHTML = `<div class="label">${label}</div><div class="value">${value}</div>`;
-  button.addEventListener('click', () => {
-    activeCardFilter = activeCardFilter === key ? 'all' : key;
-    renderAll(latestState);
+  btn.addEventListener('click', () => {
+    setPinMode(getPinMode() === 'detailed' ? 'compact' : 'detailed');
+    reflect();
   });
-
-  return button;
+  reflect();
 }
 
-async function updateStatus(id, status, notes) {
-  const res = await fetch(apiUrl('/api/update-status'), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id, status, notes })
-  });
-  const data = await res.json();
-  return !!data.ok;
-}
-
-async function togglePin(id) {
-  const res = await fetch(apiUrl('/api/toggle-pin'), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  const data = await res.json();
-  if (data.ok) {
-    const item = allListings.find((x) => String(x.id) === String(id));
-    if (item) item.pinned = data.pinned;
-  }
-  return data.ok ? data.pinned : null;
-}
-
-async function deleteListing(id) {
-  const res = await fetch(apiUrl('/api/delete-listing'), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  const data = await res.json();
-  return !!data.ok;
-}
-
-function createPinButton(item) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = `pin-btn${item.pinned ? ' pinned' : ''}`;
-
-  const label = item.pinned ? 'Désépingler' : 'Épingler en haut';
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
-  btn.innerHTML = '<i class="fa-solid fa-thumbtack pin-icon" aria-hidden="true"></i>';
-
-  btn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    btn.disabled = true;
-    const pinned = await togglePin(item.id);
-    if (pinned !== null) {
-      item.pinned = pinned;
-      renderAll(latestState);
-    } else {
-      btn.disabled = false;
-    }
-  });
-  return btn;
-}
-
-function getImageUrls(item) {
-  if (Array.isArray(item.imageUrlsLocal) && item.imageUrlsLocal.length) return item.imageUrlsLocal;
-  if (Array.isArray(item.imageUrls) && item.imageUrls.length) return item.imageUrls;
-  if (Array.isArray(item.imageUrlsRemote) && item.imageUrlsRemote.length) return item.imageUrlsRemote;
-  if (item.imageUrl) return [item.imageUrl];
-  return [];
-}
-
-function getUrgency(item) {
-  if (item.isRemoved) return { level: 'done', label: 'Retirée' };
-
-  const status = item.status || 'À contacter';
-  if (DONE_STATUSES.has(status)) return { level: 'done', label: 'Clos' };
-  if (status === 'Sans réponse' || status === 'Relance') return { level: 'high', label: 'Relance' };
-
-  const refIso = item.updatedAt || item.firstSeenAt || item.lastSeenAt;
-  const ageHours = refIso ? (Date.now() - new Date(refIso).getTime()) / 3600000 : 0;
-
-  if (status === 'À contacter') {
-    if (ageHours > 18) return { level: 'high', label: 'Urgent' };
-    if (ageHours > 8) return { level: 'medium', label: 'Suivi' };
-    return { level: 'low', label: 'OK' };
-  }
-
-  if (status === 'Visite') {
-    if (ageHours > 36) return { level: 'high', label: 'Relance' };
-    if (ageHours > 18) return { level: 'medium', label: 'Suivi' };
-    return { level: 'low', label: 'OK' };
-  }
-
-  if (status === 'Dossier') {
-    if (ageHours > 24) return { level: 'high', label: 'Urgent' };
-    if (ageHours > 12) return { level: 'medium', label: 'Suivi' };
-    return { level: 'low', label: 'OK' };
-  }
-
-  return { level: 'low', label: 'OK' };
-}
-
-function listingSourceLabel(item) {
-  const raw = String(item?.source || '').trim().toLowerCase();
-  if (raw.includes('immobilier')) return 'immobilier.ch';
-  if (raw.includes('flatfox')) return 'flatfox.ch';
-
-  const url = String(item?.url || '').trim();
-  if (url) {
-    try {
-      const host = new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
-      if (host) return host;
-    } catch {
-      // noop
-    }
-  }
-
-  return raw || null;
-}
-
-function sourceMetaHtml(item) {
-  const source = listingSourceLabel(item);
-  if (!source) return '';
-  return `<span class="meta-source">source: ${escapeHtml(source)}</span>`;
-}
-
-function isNewToday(item) {
-  if (!item.firstSeenAt) return false;
-  const seen = new Date(item.firstSeenAt);
-  const today = new Date();
-  return seen.getFullYear() === today.getFullYear()
-    && seen.getMonth() === today.getMonth()
-    && seen.getDate() === today.getDate();
-}
-
-function stateBadgesHtml(item) {
-  const badges = [];
-  if (isNewToday(item) && !item.isRemoved) badges.push('<span class="state-badge new">Nouveau</span>');
-
-  const stage = String(item?.listingStage || '').toLowerCase();
-  if (stage === 'off_market') badges.push('<span class="state-badge offmarket">Off-market</span>');
-  else if (stage === 'early_market') badges.push('<span class="state-badge early">Direct régie</span>');
-
-  if (item.isRemoved) badges.push('<span class="state-badge removed">Retirée</span>');
-
-  return badges.length ? `<div class="state-badges">${badges.join('')}</div>` : '';
-}
-
-function escapeHtml(value = '') {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function scoreLines(item) {
-  if (Array.isArray(item.scoreBreakdown) && item.scoreBreakdown.length) return item.scoreBreakdown;
-  if (!item.scoreTooltip) return [];
-
-  return String(item.scoreTooltip)
-    .split(/[|·]/)
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .filter((x) => !/^score\s*:/i.test(x));
-}
-
-function encodeScorePayload(item) {
-  const payload = {
-    score: item.score ?? 'n/a',
-    lines: scoreLines(item)
-  };
-  return encodeURIComponent(JSON.stringify(payload));
-}
-
-function decodeScorePayload(el) {
-  try {
-    return JSON.parse(decodeURIComponent(el?.dataset?.scorePayload || ''));
-  } catch {
-    return { score: 'n/a', lines: [] };
-  }
-}
-
-function scorePercent(item) {
-  const raw = Number(item.score ?? 0);
-  return Math.max(0, Math.min(100, raw));
-}
-
-function ensureScorePopover() {
-  if (!scorePopoverEl) {
-    scorePopoverEl = document.createElement('div');
-    scorePopoverEl.className = 'score-popover-floating';
-    scorePopoverEl.setAttribute('role', 'tooltip');
-    document.body.appendChild(scorePopoverEl);
-  }
-
-  if (!scorePopoverGlobalBound) {
-    document.addEventListener('click', (event) => {
-      if (!activeScoreTrigger || !scorePopoverEl?.classList.contains('visible')) return;
-      if (activeScoreTrigger.contains(event.target)) return;
-      hideScorePopover();
-    });
-
-    window.addEventListener('scroll', hideScorePopover, { passive: true });
-    window.addEventListener('resize', hideScorePopover);
-    scorePopoverGlobalBound = true;
-  }
-
-  return scorePopoverEl;
-}
-
-function placeScorePopover(trigger, pop) {
-  const rect = trigger.getBoundingClientRect();
-  const margin = 10;
-
-  const width = pop.offsetWidth || 260;
-  const height = pop.offsetHeight || 120;
-
-  let left = rect.left + rect.width / 2 - width / 2;
-  left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
-
-  let top = rect.top - height - 8;
-  if (top < margin) top = rect.bottom + 8;
-
-  pop.style.left = `${Math.round(left)}px`;
-  pop.style.top = `${Math.round(top)}px`;
-}
-
-function showScorePopover(trigger) {
-  const pop = ensureScorePopover();
-  clearTimeout(scorePopoverHideTimer);
-
-  const payload = decodeScorePayload(trigger);
-  const lines = Array.isArray(payload.lines) ? payload.lines : [];
-  const listHtml = lines.length
-    ? `<ul class="score-pop-list">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
-    : '<div class="score-pop-empty">Pas de détail disponible</div>';
-
-  pop.innerHTML = `<div class="score-pop-title">Score ${escapeHtml(payload.score)}</div>${listHtml}`;
-  pop.classList.add('visible');
-  activeScoreTrigger = trigger;
-  placeScorePopover(trigger, pop);
-}
-
-function hideScorePopover() {
-  if (!scorePopoverEl) return;
-  scorePopoverEl.classList.remove('visible');
-  activeScoreTrigger = null;
-}
-
-function scheduleHideScorePopover() {
-  clearTimeout(scorePopoverHideTimer);
-  scorePopoverHideTimer = setTimeout(() => {
-    hideScorePopover();
-  }, 80);
-}
-
-function bindScorePopovers() {
-  ensureScorePopover();
-
-  document.querySelectorAll('.score-trigger').forEach((el) => {
-    if (el.dataset.scorePopoverBound === '1') return;
-    el.dataset.scorePopoverBound = '1';
-
-    el.addEventListener('mouseenter', () => showScorePopover(el));
-    el.addEventListener('mouseleave', scheduleHideScorePopover);
-    el.addEventListener('focus', () => showScorePopover(el));
-    el.addEventListener('blur', hideScorePopover);
-
-    el.addEventListener('click', (event) => {
-      event.preventDefault();
-      if (activeScoreTrigger === el && scorePopoverEl?.classList.contains('visible')) {
-        hideScorePopover();
-      } else {
-        showScorePopover(el);
-      }
-    });
-
-    el.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        showScorePopover(el);
-      }
-      if (event.key === 'Escape') {
-        hideScorePopover();
-      }
-    });
-  });
-}
-
-function createScoreDisplay(item) {
-  const wrap = document.createElement('div');
-  wrap.className = 'score-wrap score-trigger';
-  wrap.dataset.scorePayload = encodeScorePayload(item);
-  wrap.tabIndex = 0;
-  wrap.setAttribute('role', 'button');
-  wrap.setAttribute('aria-label', `Détails du score ${item.score ?? 'n/a'}`);
-
-  const pill = document.createElement('span');
-  pill.className = 'score-pill';
-  pill.textContent = item.score ?? '-';
-
-  const track = document.createElement('span');
-  track.className = 'score-track';
-  const fill = document.createElement('span');
-  fill.className = 'score-fill';
-  fill.style.width = `${scorePercent(item)}%`;
-  track.appendChild(fill);
-
-  wrap.append(pill, track);
-  return wrap;
-}
-
-function scoreMiniHtml(item) {
-  return `<span class="score-mini score-trigger" data-score-payload="${encodeScorePayload(item).replace(/"/g, '&quot;')}" tabindex="0" role="button" aria-label="Détails du score ${item.score ?? 'n/a'}"><span class="score-pill">${item.score ?? '-'}</span><span class="score-track"><span class="score-fill" style="width:${scorePercent(item)}%"></span></span></span>`;
-}
-
-function matchesCardFilter(item, key) {
-  if (key === 'all') return true;
-  if (key === 'top') return !item.isRemoved && String(item.priority || '').startsWith('A');
-  if (key === 'urgent') return !item.isRemoved && getUrgency(item).level === 'high';
-  if (key === 'direct') {
-    const stage = String(item.listingStage || '').toLowerCase();
-    return !item.isRemoved && (stage === 'early_market' || stage === 'off_market');
-  }
-  if (key === 'new') return !item.isRemoved && isNewToday(item);
-  if (key === 'removed') return !!item.isRemoved;
-  return true;
-}
-
-function applyFilterAndSort(items) {
-  const mode = filterEl.value;
-  const sortBy = sortEl.value;
-  const q = (searchEl.value || '').trim().toLowerCase();
-
-  let out = [...items].filter((item) => {
-    if (mode === 'top') {
-      return !item.isRemoved && String(item.priority || '').startsWith('A');
-    }
-    if (mode === 'direct') {
-      const stage = String(item.listingStage || '').toLowerCase();
-      return !item.isRemoved && (stage === 'early_market' || stage === 'off_market');
-    }
-    return true;
-  });
-
-  if (q) {
-    out = out.filter((item) => {
-      const hay = `${item.objectType || ''} ${item.address || ''} ${item.area || ''} ${item.title || ''}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }
-
-  if (activeCardFilter !== 'all') {
-    out = out.filter((item) => matchesCardFilter(item, activeCardFilter));
-  }
-
-  out.sort((a, b) => {
-    // Pinned items always first
-    const aPin = a.pinned ? 1 : 0;
-    const bPin = b.pinned ? 1 : 0;
-    if (aPin !== bPin) return bPin - aPin;
-
-    const aGrey = (a.isRemoved || isRefused(a)) ? 1 : 0;
-    const bGrey = (b.isRemoved || isRefused(b)) ? 1 : 0;
-    if (aGrey !== bGrey) return aGrey - bGrey;
-
-    if (sortBy === 'price') return (a.totalChf || 999999) - (b.totalChf || 999999);
-    if (sortBy === 'area') return String(a.area || '').localeCompare(String(b.area || ''), 'fr-CH');
-    if (sortBy === 'date') {
-      const aDays = publishedMeta(a).days ?? Infinity;
-      const bDays = publishedMeta(b).days ?? Infinity;
-      return aDays - bDays;
-    }
-    return (b.score || 0) - (a.score || 0);
-  });
-
-  return out;
-}
-
-function createStatusSelect(item) {
-  const select = document.createElement('select');
-  for (const st of statuses) {
-    const opt = document.createElement('option');
-    opt.value = st;
-    opt.textContent = st;
-    if (st === item.status) opt.selected = true;
-    select.appendChild(opt);
-  }
-  return select;
-}
-
-function createSaveButton(handler) {
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'save-inline';
-  saveBtn.textContent = 'Sauver';
-  saveBtn.addEventListener('click', async () => {
-    saveBtn.textContent = '…';
-    saveBtn.disabled = true;
-    const ok = await handler();
-    saveBtn.textContent = ok ? 'Sauvé ✓' : 'Erreur';
-    setTimeout(() => {
-      saveBtn.textContent = 'Sauver';
-      saveBtn.disabled = false;
-    }, 900);
-  });
-  return saveBtn;
-}
-
-function clearKanbanDropTargets() {
-  document.querySelectorAll('.kanban-items.drop-target').forEach((el) => el.classList.remove('drop-target'));
-}
-
-function attachKanbanDropzone(body, targetStatus) {
-  body.dataset.status = targetStatus;
-
-  body.addEventListener('dragover', (event) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    body.classList.add('drop-target');
-  });
-
-  body.addEventListener('dragenter', (event) => {
-    event.preventDefault();
-    body.classList.add('drop-target');
-  });
-
-  body.addEventListener('dragleave', (event) => {
-    if (!body.contains(event.relatedTarget)) {
-      body.classList.remove('drop-target');
-    }
-  });
-
-  body.addEventListener('drop', async (event) => {
-    event.preventDefault();
-    body.classList.remove('drop-target');
-
-    const droppedId = event.dataTransfer.getData('text/plain') || draggedKanbanId;
-    if (!droppedId) return;
-
-    const item = allListings.find((x) => String(x.id) === String(droppedId));
-    if (!item) return;
-    if (item.isRemoved) return;
-    if ((item.status || 'À contacter') === targetStatus) return;
-
-    const ok = await updateStatus(item.id, targetStatus, item.notes || '');
-    if (ok) await load();
-  });
-}
-
-function setActiveView(view, persist = true) {
-  const tableActive = view !== 'kanban';
-
-  tabTableEl.classList.toggle('active', tableActive);
-  tabKanbanEl.classList.toggle('active', !tableActive);
-  panelTableEl.classList.toggle('active', tableActive);
-  panelKanbanEl.classList.toggle('active', !tableActive);
-
-  if (persist) {
-    localStorage.setItem('apartment-dashboard:view', tableActive ? 'table' : 'kanban');
-  }
-}
-
-function initViewTabs() {
-  const saved = localStorage.getItem('apartment-dashboard:view');
-  setActiveView(saved === 'kanban' ? 'kanban' : 'table', false);
-
-  tabTableEl.addEventListener('click', () => setActiveView('table'));
-  tabKanbanEl.addEventListener('click', () => setActiveView('kanban'));
-}
-
-function createThumbCell(item) {
-  const urls = getImageUrls(item);
-  const holder = document.createElement('div');
-  holder.className = 'thumb-stack';
-
-  if (!urls.length) {
-    const placeholder = document.createElement('div');
-    placeholder.className = 'thumb placeholder';
-    placeholder.textContent = 'n/a';
-    holder.appendChild(placeholder);
-    return holder;
-  }
-
-  const img = document.createElement('img');
-  img.className = 'thumb';
-  img.src = urls[0];
-  img.loading = 'lazy';
-  img.alt = `Aperçu ${item.objectType || item.title || 'annonce'}`;
-  img.style.cursor = 'pointer';
-  img.addEventListener('click', () => lightbox.show(urls, 0));
-  holder.appendChild(img);
-
-  if (urls.length > 1) {
-    const strip = document.createElement('div');
-    strip.className = 'thumb-strip';
-
-    urls.slice(1, 4).forEach((src, i) => {
-      const mini = document.createElement('img');
-      mini.className = 'thumb-mini';
-      mini.src = src;
-      mini.loading = 'lazy';
-      mini.alt = 'miniature';
-      mini.style.cursor = 'pointer';
-      mini.addEventListener('click', () => lightbox.show(urls, i + 1));
-      strip.appendChild(mini);
-    });
-
-    if (urls.length > 4) {
-      const more = document.createElement('span');
-      more.className = 'thumb-more';
-      more.textContent = `+${urls.length - 4}`;
-      more.style.cursor = 'pointer';
-      more.addEventListener('click', () => lightbox.show(urls, 4));
-      strip.appendChild(more);
-    }
-
-    holder.appendChild(strip);
-  }
-
-  return holder;
-}
-
-function isRefused(item) {
-  return !item.isRemoved && (item.status || '') === 'Refusé';
-}
-
-function createUrgencyBadge(item) {
-  const urgency = getUrgency(item);
-  const badge = document.createElement('span');
-  badge.className = `urgency-badge ${urgency.level}`;
-  badge.textContent = urgency.label;
-  badge.title = `Dernière activité: ${shortWhen(item.updatedAt || item.firstSeenAt || item.lastSeenAt)}`;
-  return badge;
-}
-
-function renderDesktop(listings) {
-  rowsEl.innerHTML = '';
-
-  if (!listings.length) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="10"><div class="empty">Aucune annonce ne correspond aux filtres.</div></td>`;
-    rowsEl.appendChild(tr);
-    return;
-  }
-
-  for (const item of listings) {
-    const tr = document.createElement('tr');
-    if (item.isRemoved) tr.classList.add('row-removed');
-    if (isRefused(item)) tr.classList.add('row-refused');
-    if (isNewToday(item) && !item.isRemoved) tr.classList.add('row-new');
-
-    const tdPriority = document.createElement('td');
-    tdPriority.innerHTML = `<span class="tag">${item.priority || '-'}</span>`;
-
-    const tdScore = document.createElement('td');
-    tdScore.appendChild(createScoreDisplay(item));
-
-    const tdImage = document.createElement('td');
-    tdImage.appendChild(createThumbCell(item));
-
-    const tdInfo = document.createElement('td');
-    tdInfo.innerHTML = `<a href="${item.url}" target="_blank" rel="noreferrer">${item.objectType || item.title}</a><div class="small">${item.address || ''}${sourceMetaHtml(item) ? ` · ${sourceMetaHtml(item)}` : ''}</div>${stateBadgesHtml(item)}`;
-
-    const tdPrice = document.createElement('td');
-    tdPrice.innerHTML = `<div>${money(item.totalChf)}</div><div class="small">${item.priceRaw || ''}</div>`;
-
-    const tdPublished = document.createElement('td');
-    tdPublished.textContent = publishedLabel(item);
-    tdPublished.title = publishedTitle(item);
-
-    const tdDistance = document.createElement('td');
-    tdDistance.appendChild(createTravelCell(item));
-
-    const tdStatus = document.createElement('td');
-    const select = createStatusSelect(item);
-    if (item.isRemoved) select.disabled = true;
-    tdStatus.appendChild(select);
-
-    const tdNotes = document.createElement('td');
-    const notesInput = document.createElement('input');
-    notesInput.value = item.notes || '';
-    notesInput.placeholder = 'notes';
-    if (item.isRemoved) notesInput.disabled = true;
-    tdNotes.appendChild(notesInput);
-
-    if (!item.isRemoved) {
-      select.addEventListener('change', async () => {
-        select.disabled = true;
-        await updateStatus(item.id, select.value, notesInput.value);
-        await load();
-      });
-    }
-
-    const tdAction = document.createElement('td');
-    const actionCell = document.createElement('div');
-    actionCell.className = 'action-cell';
-
-    if (item.isRemoved) {
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'save-inline danger';
-      deleteBtn.textContent = 'Supprimer';
-      deleteBtn.addEventListener('click', async () => {
-        const okConfirm = window.confirm('Supprimer cette annonce retirée du suivi ?');
-        if (!okConfirm) return;
-        deleteBtn.disabled = true;
-        deleteBtn.textContent = '…';
-        const ok = await deleteListing(item.id);
-        if (ok) await load();
-        else {
-          deleteBtn.disabled = false;
-          deleteBtn.textContent = 'Supprimer';
-        }
-      });
-      actionCell.appendChild(deleteBtn);
-    } else {
-      const pinBtn = createPinButton(item);
-      const saveBtn = createSaveButton(() => updateStatus(item.id, select.value, notesInput.value));
-      actionCell.append(pinBtn, saveBtn);
-    }
-
-    tdAction.appendChild(actionCell);
-
-    if (item.pinned) tr.classList.add('row-pinned');
-    tr.append(tdPriority, tdScore, tdImage, tdInfo, tdPrice, tdPublished, tdDistance, tdStatus, tdNotes, tdAction);
-    rowsEl.appendChild(tr);
-  }
-}
-
-function renderKanban(listings) {
-  draggedKanbanId = null;
-  kanbanEl.innerHTML = '';
-
-  if (!listings.length) {
-    kanbanEl.innerHTML = '<div class="empty">Aucune annonce pour ce filtre.</div>';
-    return;
-  }
-
-  const baseStatuses = (statuses.length
-    ? statuses
-    : ['À contacter', 'Visite', 'Dossier', 'Relance', 'Accepté', 'Refusé', 'Sans réponse'])
-    .slice();
-  const orderedStatuses = [...baseStatuses, REMOVED_KANBAN_STATUS];
-
-  for (const status of orderedStatuses) {
-    const colItems = status === REMOVED_KANBAN_STATUS
-      ? listings.filter((x) => x.isRemoved)
-      : listings.filter((x) => !x.isRemoved && (x.status || 'À contacter') === status);
-
-    const col = document.createElement('section');
-    col.className = 'kanban-col';
-
-    const head = document.createElement('header');
-    head.className = 'kanban-head';
-    head.innerHTML = `<h3>${status}</h3><span>${colItems.length}</span>`;
-    col.appendChild(head);
-
-    const body = document.createElement('div');
-    body.className = 'kanban-items';
-    if (status !== REMOVED_KANBAN_STATUS) {
-      attachKanbanDropzone(body, status);
-    }
-
-    if (!colItems.length) {
-      const empty = document.createElement('div');
-      empty.className = 'kanban-empty';
-      empty.textContent = '—';
-      body.appendChild(empty);
-    }
-
-    for (const item of colItems) {
-      const kCard = document.createElement('article');
-      kCard.className = 'k-card';
-      if (item.isRemoved) kCard.classList.add('removed');
-      if (isRefused(item)) kCard.classList.add('refused');
-      if (isNewToday(item) && !item.isRemoved) kCard.classList.add('new');
-      if (item.pinned) kCard.classList.add('pinned');
-
-      if (!item.isRemoved) {
-        kCard.draggable = true;
-        kCard.dataset.id = String(item.id);
-
-        kCard.addEventListener('dragstart', (event) => {
-          draggedKanbanId = String(item.id);
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('text/plain', String(item.id));
-          kCard.classList.add('dragging');
-        });
-
-        kCard.addEventListener('dragend', () => {
-          draggedKanbanId = null;
-          kCard.classList.remove('dragging');
-          clearKanbanDropTargets();
-        });
-      }
-
-      const urls = getImageUrls(item);
-      const cover = urls[0] || '';
-
-      kCard.innerHTML = `
-        ${cover ? `<img class="k-cover" src="${cover}" alt="Aperçu ${item.objectType || item.title}" loading="lazy" />` : '<div class="k-cover"></div>'}
-        <div class="k-body">
-          <div class="k-meta-top">
-            <span class="tag">${item.priority || '-'}</span>
-            ${scoreMiniHtml(item)}
-            <span class="k-price">${money(item.totalChf)}</span>
-          </div>
-          <a href="${item.url}" target="_blank" rel="noreferrer" class="k-title">${item.objectType || item.title}</a>
-          <div class="k-sub">${item.area || '-'} · ${item.address || ''}${sourceMetaHtml(item) ? ` · ${sourceMetaHtml(item)}` : ''}</div>
-          <div class="k-distance">${travelInlineLabel(item)}</div>
-          <div class="k-sub">Publié: ${publishedLabel(item)}</div>
-          ${stateBadgesHtml(item)}
-          <div class="k-bottom"></div>
-        </div>
-      `;
-
-      const coverEl = kCard.querySelector('.k-cover');
-      if (coverEl && urls.length) {
-        coverEl.style.cursor = 'pointer';
-        coverEl.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); lightbox.show(urls, 0); });
-      }
-
-      const bottom = kCard.querySelector('.k-bottom');
-      const urgency = createUrgencyBadge(item);
-      bottom.appendChild(urgency);
-
-      if (urls.length > 1) {
-        const mini = document.createElement('div');
-        mini.className = 'k-mini-strip';
-        urls.slice(1, 4).forEach((src, i) => {
-          const im = document.createElement('img');
-          im.src = src;
-          im.loading = 'lazy';
-          im.alt = 'miniature';
-          im.style.cursor = 'pointer';
-          im.addEventListener('click', (e) => { e.stopPropagation(); lightbox.show(urls, i + 1); });
-          mini.appendChild(im);
-        });
-        bottom.appendChild(mini);
-      }
-
-      const actions = document.createElement('div');
-      actions.className = 'k-actions';
-      actions.addEventListener('dragstart', (event) => event.preventDefault());
-
-      if (!item.isRemoved) {
-        const pinBtn = createPinButton(item);
-        pinBtn.draggable = false;
-
-        const select = createStatusSelect(item);
-        select.draggable = false;
-
-        select.addEventListener('change', async () => {
-          select.disabled = true;
-          await updateStatus(item.id, select.value, item.notes || '');
-          await load();
-        });
-
-        actions.append(pinBtn, select);
-      } else {
-        const retired = document.createElement('div');
-        retired.className = 'k-retired-note';
-        retired.textContent = `Retirée le ${shortWhen(item.removedAt || item.lastSeenAt)}`;
-
-        const del = document.createElement('button');
-        del.className = 'save-inline danger';
-        del.textContent = 'Supprimer';
-        del.addEventListener('click', async () => {
-          const okConfirm = window.confirm('Supprimer cette annonce retirée du suivi ?');
-          if (!okConfirm) return;
-          del.disabled = true;
-          del.textContent = '…';
-          const ok = await deleteListing(item.id);
-          if (ok) await load();
-          else {
-            del.disabled = false;
-            del.textContent = 'Supprimer';
-          }
-        });
-
-        actions.append(retired, del);
-      }
-
-      kCard.querySelector('.k-body').appendChild(actions);
-
-      body.appendChild(kCard);
-    }
-
-    col.appendChild(body);
-    kanbanEl.appendChild(col);
-  }
-}
-
-function renderMobile(listings) {
-  mobileRowsEl.innerHTML = '';
-
-  if (!listings.length) {
-    mobileRowsEl.innerHTML = '<div class="empty">Aucune annonce ne correspond aux filtres.</div>';
-    return;
-  }
-
-  for (const item of listings) {
-    const card = document.createElement('article');
-    card.className = 'mobile-card';
-    if (item.isRemoved) card.classList.add('removed');
-    if (isRefused(item)) card.classList.add('refused');
-    if (isNewToday(item) && !item.isRemoved) card.classList.add('new');
-
-    const urls = getImageUrls(item);
-    const cover = urls[0] || '';
-
-    card.innerHTML = `
-      ${cover ? `<img class="mobile-cover" src="${cover}" alt="Aperçu ${item.objectType || item.title}" loading="lazy" />` : '<div class="mobile-cover"></div>'}
-      <div class="mobile-content">
-        <h3 class="mobile-title"><span class="tag">${item.priority || '-'}</span> ${scoreMiniHtml(item)} <a href="${item.url}" target="_blank" rel="noreferrer">${item.objectType || item.title}</a></h3>
-        <div class="mobile-meta">
-          <div>${item.address || ''}</div>
-          <div>${item.area || '-'} · ${money(item.totalChf)}${sourceMetaHtml(item) ? ` · ${sourceMetaHtml(item)}` : ''}</div>
-          <div>${travelInlineLabel(item)}</div>
-          <div>Publié: ${publishedLabel(item)}</div>
-          <div>${item.priceRaw || ''}</div>
-          ${stateBadgesHtml(item)}
-          <div class="mobile-urgency"></div>
-        </div>
-      </div>
-    `;
-
-    const mobileCover = card.querySelector('.mobile-cover');
-    if (mobileCover && urls.length) {
-      mobileCover.style.cursor = 'pointer';
-      mobileCover.addEventListener('click', () => lightbox.show(urls, 0));
-    }
-
-    const urgency = createUrgencyBadge(item);
-    card.querySelector('.mobile-urgency').appendChild(urgency);
-
-    if (urls.length > 1) {
-      const strip = document.createElement('div');
-      strip.className = 'mobile-thumb-strip';
-      urls.slice(1, 5).forEach((src, i) => {
-        const im = document.createElement('img');
-        im.src = src;
-        im.loading = 'lazy';
-        im.alt = 'miniature';
-        im.style.cursor = 'pointer';
-        im.addEventListener('click', () => lightbox.show(urls, i + 1));
-        strip.appendChild(im);
-      });
-      card.querySelector('.mobile-content').appendChild(strip);
-    }
-
-    const controls = document.createElement('div');
-    controls.className = 'mobile-controls';
-
-    if (!item.isRemoved) {
-      const pinBtn = createPinButton(item);
-      const select = createStatusSelect(item);
-      const notesInput = document.createElement('input');
-      notesInput.value = item.notes || '';
-      notesInput.placeholder = 'notes';
-
-      select.addEventListener('change', async () => {
-        select.disabled = true;
-        await updateStatus(item.id, select.value, notesInput.value);
-        await load();
-      });
-
-      const pinRow = document.createElement('div');
-      pinRow.className = 'mobile-pin-row';
-      pinRow.append(pinBtn, select);
-
-      const saveBtn = createSaveButton(() => updateStatus(item.id, select.value, notesInput.value));
-      controls.append(pinRow, notesInput, saveBtn);
-    } else {
-      const retired = document.createElement('div');
-      retired.className = 'k-retired-note';
-      retired.textContent = `Annonce retirée le ${shortWhen(item.removedAt || item.lastSeenAt)}`;
-
-      const del = document.createElement('button');
-      del.className = 'save-inline danger';
-      del.textContent = 'Supprimer';
-      del.addEventListener('click', async () => {
-        const okConfirm = window.confirm('Supprimer cette annonce retirée du suivi ?');
-        if (!okConfirm) return;
-        del.disabled = true;
-        del.textContent = '…';
-        const ok = await deleteListing(item.id);
-        if (ok) await load();
-        else {
-          del.disabled = false;
-          del.textContent = 'Supprimer';
-        }
-      });
-
-      controls.append(retired, del);
-    }
-
-    if (item.pinned) card.classList.add('row-pinned');
-    card.querySelector('.mobile-content').appendChild(controls);
-    mobileRowsEl.appendChild(card);
-  }
-}
-
-function renderCards(listings, latest) {
-  cardsEl.innerHTML = '';
-
-  const top = listings.filter((x) => String(x.priority || '').startsWith('A') && !x.isRemoved).length;
-  const urgent = listings.filter((x) => getUrgency(x).level === 'high' && !x.isRemoved).length;
-  const removed = listings.filter((x) => !!x.isRemoved).length;
-  const news = listings.filter((x) => isNewToday(x) && !x.isRemoved).length;
-
-  const direct = listings.filter((x) => {
-    const stage = String(x.listingStage || '').toLowerCase();
-    return !x.isRemoved && (stage === 'early_market' || stage === 'off_market');
-  }).length;
-
-  cardsEl.append(
-    card('Annonces visibles', listings.length, 'all'),
-    card('Priorité haute', top, 'top'),
-    card('Régie directe', direct, 'direct'),
-    card('Urgentes', urgent, 'urgent'),
-    card('Nouvelles', news, 'new'),
-    card('Retirées', removed, 'removed')
+function fitMapToVisibleData() {
+  const visible = state.payload.listings.filter((l) =>
+    Number.isFinite(l.lat) &&
+    Number.isFinite(l.lon) &&
+    !state.filter.hiddenProfiles.has(l.profileSlug)
   );
-}
-
-function renderAll(latest) {
-  hideScorePopover();
-  const filtered = applyFilterAndSort(allListings);
-  renderCards(allListings, latest);
-  renderKanban(filtered);
-  renderDesktop(filtered);
-  renderMobile(filtered);
-  bindScorePopovers();
-}
-
-async function load() {
-  const res = await fetch(apiUrl('/api/state'));
-  const { tracker, latest, profile, areas } = await res.json();
-
-  statuses = tracker.statuses || [];
-  allListings = (tracker.listings || []).filter((x) => x.display !== false);
-  latestState = latest || { newCount: 0 };
-
-  const activeCount = allListings.filter((x) => !x.isRemoved).length;
-  const removedCount = allListings.filter((x) => x.isRemoved).length;
-
-  const effectiveProfile = String(profile || PROFILE || 'vevey');
-  if (heroTitleEl) {
-    heroTitleEl.textContent = PROFILE_TITLES[effectiveProfile] || `Suivi ${effectiveProfile}`;
+  if (visible.length > 0) {
+    fitMapToPoints(visible.map((l) => [l.lat, l.lon]));
+    return;
   }
-  if (typeof areas === 'string' && areas.trim()) {
-    profileAreasText = `Zones: ${areas}`;
+  // No listings yet — fall back to profile area centroids.
+  const areaPoints = [];
+  for (const profile of state.payload.profiles) {
+    if (state.filter.hiddenProfiles.has(profile.slug)) continue;
+    for (const area of profile.areas || []) {
+      if (Number.isFinite(area.lat) && Number.isFinite(area.lon)) {
+        areaPoints.push([area.lat, area.lon]);
+      }
+    }
   }
-  if (zonesEl) {
-    zonesEl.textContent = profileAreasText;
-  }
-
-  subEl.textContent = `Profil: ${effectiveProfile} · Dernier scan: ${shortWhen(latest.generatedAt)} · ${activeCount} actives · ${removedCount} retirées`;
-  renderAll(latestState);
+  if (areaPoints.length > 0) fitMapToPoints(areaPoints, { singleZoom: 11, maxZoom: 12 });
 }
 
-refreshBtn.addEventListener('click', load);
-filterEl.addEventListener('change', () => renderAll(latestState));
-sortEl.addEventListener('change', () => {
-  localStorage.setItem('apartment-search-sort', sortEl.value);
-  renderAll(latestState);
-});
-searchEl.addEventListener('input', () => renderAll(latestState));
-
-// Restaurer le tri depuis localStorage au chargement
-const savedSort = localStorage.getItem('apartment-search-sort');
-if (savedSort && sortEl.querySelector(`option[value="${savedSort}"]`)) {
-  sortEl.value = savedSort;
-}
-
-scanBtn.addEventListener('click', async () => {
-  scanBtn.disabled = true;
-  scanOut.classList.remove('hidden');
-  scanOut.textContent = 'Scan en cours…';
-
+async function refreshAll() {
+  let payload = { profiles: [], listings: [] };
   try {
-    const res = await fetch(apiUrl('/api/run-scan'), { method: 'POST' });
-    const data = await res.json();
-    scanOut.textContent = data.ok ? data.summary : `Erreur: ${data.error}`;
-    await load();
+    const res = await fetch('/api/map-listings');
+    payload = await res.json();
   } catch (err) {
-    scanOut.textContent = `Erreur: ${err.message}`;
-  } finally {
-    scanBtn.disabled = false;
+    console.error('failed to load /api/map-listings', err);
   }
-});
+  state.payload = payload;
 
-initViewTabs();
-
-// ── Lightbox ──
-
-const lightbox = (() => {
-  let urls = [];
-  let idx = 0;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'lightbox-overlay';
-  overlay.innerHTML = `
-    <button class="lightbox-close" aria-label="Fermer">&times;</button>
-    <button class="lightbox-nav lightbox-prev" aria-label="Précédent">&#8249;</button>
-    <img class="lightbox-img" src="" alt="Photo annonce" />
-    <button class="lightbox-nav lightbox-next" aria-label="Suivant">&#8250;</button>
-    <div class="lightbox-strip"></div>
-    <div class="lightbox-counter"></div>
-  `;
-  document.body.appendChild(overlay);
-
-  const imgEl = overlay.querySelector('.lightbox-img');
-  const counterEl = overlay.querySelector('.lightbox-counter');
-  const stripEl = overlay.querySelector('.lightbox-strip');
-  const prevBtn = overlay.querySelector('.lightbox-prev');
-  const nextBtn = overlay.querySelector('.lightbox-next');
-  const closeBtn = overlay.querySelector('.lightbox-close');
-
-  function show(imageUrls, startIdx = 0) {
-    urls = imageUrls || [];
-    idx = startIdx;
-    update();
-    overlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
+  for (const profile of payload.profiles) {
+    setProfileVisibility(profile.slug, !state.filter.hiddenProfiles.has(profile.slug));
   }
 
-  function hide() {
-    overlay.classList.remove('open');
-    document.body.style.overflow = '';
+  rerender();
+}
+
+function rerender() {
+  const editing = isEditing();
+  const visible = applyFilters(state.payload.listings, state.filter, Date.now());
+
+  // Sync per-profile visibility BEFORE attaching markers, so attachMarker's
+  // visibility gate doesn't skip listings of profiles that just got unhidden.
+  for (const profile of state.payload.profiles) {
+    setProfileVisibility(profile.slug, !state.filter.hiddenProfiles.has(profile.slug));
   }
 
-  function update() {
-    if (!urls.length) return;
-    idx = ((idx % urls.length) + urls.length) % urls.length;
-    imgEl.src = urls[idx];
-    counterEl.textContent = `${idx + 1} / ${urls.length}`;
-    prevBtn.style.display = urls.length > 1 ? '' : 'none';
-    nextBtn.style.display = urls.length > 1 ? '' : 'none';
+  setListings(visible);
 
-    stripEl.innerHTML = '';
-    if (urls.length > 1) {
-      urls.forEach((src, i) => {
-        const thumb = document.createElement('img');
-        thumb.src = src;
-        thumb.alt = `Photo ${i + 1}`;
-        if (i === idx) thumb.classList.add('active');
-        thumb.addEventListener('click', (e) => { e.stopPropagation(); idx = i; update(); });
-        stripEl.appendChild(thumb);
+  // Filter / quick-sorts panels
+  if (!editing) {
+    renderProfilesPanel(
+      { profiles: state.payload.profiles },
+      state.filter,
+      {
+        onChange: applyFilterMutation,
+        onAddProfile: () => enterEditMode(null),
+        onEditProfile: (slug) => enterEditMode(slug)
+      }
+    );
+    const visibleIgnoringStatus = applyFilters(
+      state.payload.listings,
+      { ...state.filter, statuses: null },
+      Date.now()
+    );
+    renderQuickSorts(
+      { listings: visible, statusCountListings: visibleIgnoringStatus },
+      state.filter,
+      { onChange: applyFilterMutation }
+    );
+    setPanelsVisible(true);
+  } else {
+    setPanelsVisible(false);
+  }
+
+  // Listings + detail panel
+  if (!editing) {
+    setListingsVisible(true);
+    renderListings(visible, {
+      onClick: (id) => handleRowClick(id),
+      onHover: (id) => setHoveredRow(id),
+      onAction: handleListingAction,
+      onMarkViewed: markViewed
+    });
+  } else {
+    setListingsVisible(false);
+    closeDetailPanel();
+  }
+
+  // Bottom-bar stats reflect the unfiltered set so totals don't jump as filters change
+  const unread = (state.payload.listings || []).filter((l) => !l.viewedAt).length;
+  const total = (state.payload.listings || []).length;
+  const totalEl = document.getElementById('stats-total');
+  const unreadEl = document.getElementById('stats-unread');
+  if (totalEl) totalEl.textContent = String(total);
+  if (unreadEl) unreadEl.textContent = String(unread);
+  document.getElementById('bottombar')?.classList.toggle('hidden', editing);
+}
+
+function applyFilterMutation(mutator) {
+  const next = cloneFilter(state.filter);
+  mutator(next);
+  state.filter = next;
+  persistFilterState(next);
+  rerender();
+}
+
+// ─── Pin / row click ──────────────────────────────────────────────────────────
+
+function handlePinClick(id) {
+  const listing = getListing(id) || lookupInPayload(id);
+  if (!listing) return;
+  setSelectedMarker(id);
+  highlightRow(id);
+  markRowAsRead(id);
+  queueViewed(id);
+  openDetailPanel(decorateListing(listing));
+  // Optimistically update payload so toggleRead etc. reflect immediately
+  optimisticallyMarkViewed(id);
+}
+
+function handleRowClick(id) {
+  const listing = getListing(id) || lookupInPayload(id);
+  if (!listing) return;
+  focusListing(id);
+  setSelectedMarker(id);
+  markRowAsRead(id);
+  queueViewed(id);
+  openDetailPanel(decorateListing(listing));
+  optimisticallyMarkViewed(id);
+}
+
+function handlePinHover(id) {
+  setHoveredRow(id);
+}
+
+function lookupInPayload(id) {
+  return (state.payload.listings || []).find((l) => l.id === id) || null;
+}
+
+function decorateListing(listing) {
+  // Inject profile title for the detail panel header.
+  const profile = state.payload.profiles.find((p) => p.slug === listing.profileSlug);
+  return {
+    ...listing,
+    profileTitle: profile?.shortTitle || profile?.label || listing.profileSlug
+  };
+}
+
+function optimisticallyMarkViewed(id) {
+  const idx = state.payload.listings.findIndex((l) => l.id === id);
+  if (idx === -1) return;
+  if (state.payload.listings[idx].viewedAt) return;
+  state.payload.listings[idx] = {
+    ...state.payload.listings[idx],
+    viewedAt: new Date().toISOString()
+  };
+}
+
+// ─── Listing actions (mark read, archive) ─────────────────────────────────────
+
+async function handleListingAction(action, listing) {
+  if (action === 'toggleRead') return toggleRead(listing);
+  if (action === 'archive')    return setStatus(listing, 'archived',  { closeDetail: true });
+  if (action === 'pursue')     return setStatus(listing, 'pursuing');
+  if (action === 'sort')       return setStatus(listing, 'sorting');
+}
+
+async function toggleRead(listing) {
+  const idx = state.payload.listings.findIndex((l) => l.id === listing.id);
+  if (idx === -1) return;
+  const current = state.payload.listings[idx];
+  const newViewedAt = current.viewedAt ? null : new Date().toISOString();
+  state.payload.listings[idx] = { ...current, viewedAt: newViewedAt };
+  rerender();
+  if (isDetailFor(listing.id)) {
+    openDetailPanel(decorateListing(state.payload.listings[idx]));
+  }
+
+  // Server has only "mark viewed" (cannot un-set). Send the API only when transitioning to viewed.
+  if (newViewedAt) {
+    try {
+      await fetch('/api/mark-viewed?profile=' + encodeURIComponent(listing.profileSlug), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ids: [listing.id] })
       });
+    } catch (err) {
+      console.error('mark-viewed failed', err);
+    }
+  }
+}
+
+async function setStatus(listing, status, { closeDetail = false } = {}) {
+  const idx = state.payload.listings.findIndex((l) => l.id === listing.id);
+  if (idx !== -1) {
+    state.payload.listings[idx] = { ...state.payload.listings[idx], status };
+  }
+  rerender();
+  if (isDetailFor(listing.id)) {
+    if (closeDetail) closeDetailPanel();
+    else openDetailPanel(decorateListing(state.payload.listings[idx] || listing));
+  }
+  try {
+    const res = await fetch('/api/update-status?profile=' + encodeURIComponent(listing.profileSlug), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: listing.id, status })
+    });
+    if (!res.ok) console.error('update-status failed', res.status);
+  } catch (err) {
+    console.error('update-status failed', err);
+  }
+}
+
+async function clearVisibleListings() {
+  const visible = applyFilters(state.payload.listings, state.filter, Date.now());
+  if (visible.length === 0) return;
+
+  const confirmed = window.confirm(
+    'Marquer ' + visible.length + ' annonce' + (visible.length === 1 ? '' : 's') + ' comme lue' + (visible.length === 1 ? '' : 's') + ' et archivée' + (visible.length === 1 ? '' : 's') + ' ?'
+  );
+  if (!confirmed) return;
+
+  const now = new Date().toISOString();
+  const unviewedByProfile = new Map();
+  const idsByProfile = new Map();
+
+  for (const listing of visible) {
+    if (!idsByProfile.has(listing.profileSlug)) idsByProfile.set(listing.profileSlug, []);
+    idsByProfile.get(listing.profileSlug).push(listing.id);
+
+    const idx = state.payload.listings.findIndex((l) => l.id === listing.id);
+    if (idx === -1) continue;
+    const current = state.payload.listings[idx];
+    state.payload.listings[idx] = {
+      ...current,
+      status: 'archived',
+      viewedAt: current.viewedAt || now
+    };
+    if (!current.viewedAt) {
+      if (!unviewedByProfile.has(listing.profileSlug)) unviewedByProfile.set(listing.profileSlug, []);
+      unviewedByProfile.get(listing.profileSlug).push(listing.id);
     }
   }
 
-  closeBtn.addEventListener('click', hide);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) hide(); });
-  prevBtn.addEventListener('click', (e) => { e.stopPropagation(); idx--; update(); });
-  nextBtn.addEventListener('click', (e) => { e.stopPropagation(); idx++; update(); });
-  imgEl.addEventListener('click', (e) => e.stopPropagation());
+  rerender();
+  closeDetailPanel();
 
-  document.addEventListener('keydown', (e) => {
-    if (!overlay.classList.contains('open')) return;
-    if (e.key === 'Escape') hide();
-    else if (e.key === 'ArrowLeft') { idx--; update(); }
-    else if (e.key === 'ArrowRight') { idx++; update(); }
+  const requests = [];
+  for (const [profileSlug, ids] of unviewedByProfile) {
+    requests.push(
+      fetch('/api/mark-viewed?profile=' + encodeURIComponent(profileSlug), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ids })
+      }).catch((err) => console.error('mark-viewed failed', err))
+    );
+  }
+  for (const [profileSlug, ids] of idsByProfile) {
+    requests.push(
+      fetch('/api/update-status?profile=' + encodeURIComponent(profileSlug), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ids, status: 'archived' })
+      }).catch((err) => console.error('update-status failed', err))
+    );
+  }
+  await Promise.all(requests);
+}
+
+async function markViewed(ids) {
+  // ids are debounced from listings-panel's IntersectionObserver; group by profile.
+  const idSet = new Set(ids);
+  const groups = new Map();
+  for (const listing of state.payload.listings) {
+    if (!idSet.has(listing.id)) continue;
+    if (!groups.has(listing.profileSlug)) groups.set(listing.profileSlug, []);
+    groups.get(listing.profileSlug).push(listing.id);
+  }
+  await Promise.all([...groups.entries()].map(([profileSlug, groupIds]) =>
+    fetch('/api/mark-viewed?profile=' + encodeURIComponent(profileSlug), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ids: groupIds })
+    }).catch((err) => console.error('mark-viewed failed', err))
+  ));
+}
+
+// ─── Scan ─────────────────────────────────────────────────────────────────────
+
+async function runScansSequentially(slugs) {
+  const button = document.getElementById('scan-button');
+  const buttonText = document.getElementById('scan-button-text');
+  if (button) button.classList.add('is-running');
+  if (buttonText) buttonText.textContent = 'Scan en cours…';
+  for (const slug of slugs) {
+    await new Promise((resolve) => {
+      startScan(slug, {
+        onListing: (listing) => {
+          state.payload.listings = upsertListing(state.payload.listings, listing);
+          addListing(listing, { animate: true });
+        },
+        onScanDone: () => { refreshAll().finally(resolve); },
+        onScanError: () => resolve()
+      });
+    });
+  }
+  if (button) button.classList.remove('is-running');
+  if (buttonText) buttonText.textContent = 'Scanner';
+  updateSyncPill();
+}
+
+function upsertListing(list, listing) {
+  const idx = list.findIndex((l) => l.id === listing.id);
+  if (idx === -1) return [...list, listing];
+  const next = list.slice();
+  next[idx] = { ...next[idx], ...listing };
+  return next;
+}
+
+// ─── Profile edit lifecycle ───────────────────────────────────────────────────
+
+async function handleEditStart({ profile, color, onCommuneToggle, onCommuneHover, onCommuneSelectMany }) {
+  closeDetailPanel();
+  await setEditMode({
+    profile,
+    color,
+    onCommuneToggle,
+    onCommuneHover,
+    onCommuneSelectMany
   });
+}
 
-  return { show, hide };
-})();
+async function handleEditEnd() {
+  await setEditMode(null);
+}
 
-load();
+async function handleZoneAdded(zone) {
+  await addEditZone(zone);
+}
+
+function handleZoneRemoved(zone) {
+  removeEditZone(zone);
+}
+
+async function handleZonesAdded(zones) {
+  for (const zone of zones) {
+    await addEditZone(zone);
+  }
+}
+
+async function handleProfileSaved() {
+  await refreshAll();
+}
+
+function handleEditClosed() {
+  rerender();
+}
+
+// ─── Sync pill ────────────────────────────────────────────────────────────────
+
+function updateSyncPill() {
+  const text = document.getElementById('sync-pill-text');
+  if (!text) return;
+  const ts = freshestTimestamp(state.payload.listings || []);
+  if (!ts) { text.textContent = 'pas encore synchronisé'; return; }
+  text.textContent = 'synchronisé ' + relativeTime(ts);
+}
+
+function freshestTimestamp(listings) {
+  let max = 0;
+  for (const l of listings) {
+    const candidates = [l.lastSeenAt, l.firstSeenAt, l.publishedAt].filter(Boolean);
+    for (const c of candidates) {
+      const t = Date.parse(c);
+      if (Number.isFinite(t) && t > max) max = t;
+    }
+  }
+  return max || null;
+}
+
+function relativeTime(ts) {
+  const diff = Date.now() - ts;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "à l'instant";
+  if (min < 60) return 'il y a ' + min + ' min';
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return 'il y a ' + hours + ' h';
+  const days = Math.floor(hours / 24);
+  return 'il y a ' + days + ' j';
+}
+
+// ─── Filter state persistence ────────────────────────────────────────────────
+
+function cloneFilter(s) {
+  return {
+    hiddenProfiles: new Set(s.hiddenProfiles),
+    recent: s.recent,
+    unreadOnly: s.unreadOnly,
+    statuses: new Set(s.statuses),
+    priorities: s.priorities ? new Set(s.priorities) : null,
+    sources: s.sources ? new Set(s.sources) : null
+  };
+}
+
+function hydrateFilterState() {
+  const fromStorage = readJson(localStorage.getItem(STATE_KEY));
+  const base = defaultFilterState();
+  if (!fromStorage) return base;
+  return {
+    hiddenProfiles: new Set(fromStorage.hiddenProfiles || []),
+    recent: fromStorage.recent || base.recent,
+    unreadOnly: !!fromStorage.unreadOnly,
+    statuses: new Set(fromStorage.statuses || [...base.statuses]),
+    priorities: null,
+    sources: null
+  };
+}
+
+function persistFilterState(s) {
+  const serializable = {
+    hiddenProfiles: [...s.hiddenProfiles],
+    recent: s.recent,
+    unreadOnly: s.unreadOnly,
+    statuses: [...s.statuses]
+  };
+  localStorage.setItem(STATE_KEY, JSON.stringify(serializable));
+  syncUrl(s);
+}
+
+function syncUrl(s) {
+  const params = new URLSearchParams(window.location.search);
+  const visible = state.payload.profiles
+    .map((p) => p.slug)
+    .filter((slug) => !s.hiddenProfiles.has(slug));
+  if (visible.length && visible.length < state.payload.profiles.length) {
+    params.set('profiles', visible.join(','));
+  } else {
+    params.delete('profiles');
+  }
+  if (s.recent && s.recent !== 'any') params.set('recent', s.recent); else params.delete('recent');
+  if (s.unreadOnly) params.set('unread', '1'); else params.delete('unread');
+
+  const next = params.toString();
+  const url = window.location.pathname + (next ? '?' + next : '');
+  window.history.replaceState(null, '', url);
+}
+
+function applyUrlOverridesAfterPayload() {
+  const params = new URLSearchParams(window.location.search);
+  const profilesParam = params.get('profiles');
+  if (profilesParam) {
+    const requested = new Set(profilesParam.split(',').filter(Boolean));
+    state.filter.hiddenProfiles = new Set(
+      state.payload.profiles.map((p) => p.slug).filter((slug) => !requested.has(slug))
+    );
+  }
+  const recent = params.get('recent');
+  if (recent && ['1d', '3d', '7d', '14d'].includes(recent)) state.filter.recent = recent;
+  if (params.get('unread') === '1') state.filter.unreadOnly = true;
+
+  persistFilterState(state.filter);
+  rerender();
+}
+
+function readJson(raw) {
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+bootstrap().catch((err) => {
+  console.error('bootstrap failed', err);
+  alert('Erreur au démarrage: ' + err.message);
+});

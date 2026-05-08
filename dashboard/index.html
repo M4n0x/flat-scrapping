@@ -3,105 +3,137 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Apartment Ops — Dashboard</title>
+    <title>Apartment Ops</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <link rel="stylesheet" href="/dashboard/tokens.css" />
+    <link rel="stylesheet" href="/dashboard/components.css" />
     <link rel="stylesheet" href="/dashboard/styles.css" />
   </head>
-  <body>
-    <div class="bg-layer" aria-hidden="true"></div>
+  <body class="app-body">
+    <div id="app-shell" class="app-shell">
 
-    <main class="app-shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">Apartment Ops</p>
-          <h1>Chargement du profil…</h1>
-          <p id="zones" class="sub"></p>
-          <p id="sub" class="sub"></p>
-        </div>
+      <main id="map-container" class="app-map" aria-label="Carte des annonces">
+        <div id="map" class="map-canvas"></div>
+      </main>
 
-        <div class="actions">
-          <select id="profile-switcher" class="profile-switcher" aria-label="Changer de profil"></select>
-          <button id="refresh" class="btn ghost">Rafraîchir</button>
-          <button id="scan" class="btn primary">Scanner</button>
-        </div>
+      <!-- Top bar -->
+      <header class="app-topbar">
+        <a href="/" class="brand-pill">
+          <span class="brand-dot"></span>
+          <span class="brand-name">Apartment Ops</span>
+          <span class="brand-sep">/</span>
+          <span class="brand-sub">flats radar</span>
+        </a>
+        <span id="edit-mode-badge" class="edit-mode-badge hidden">Mode édition</span>
+        <span class="topbar-grow"></span>
+        <span id="sync-pill" class="sync-pill"><span class="dot"></span><span id="sync-pill-text">synchronisé</span></span>
+        <button id="scan-button" class="scanner-btn" type="button">
+          <i class="fa-solid fa-satellite-dish" aria-hidden="true"></i>
+          <span id="scan-button-text">Scanner</span>
+        </button>
       </header>
 
-      <pre id="scan-output" class="scan-output hidden"></pre>
+      <!-- Map zoom controls -->
+      <div class="map-zoom" aria-label="Zoom carte">
+        <button id="zoom-in" type="button" title="Zoom +">+</button>
+        <button id="zoom-out" type="button" title="Zoom −">−</button>
+      </div>
 
-      <section class="cards" id="cards"></section>
+      <!-- Pin-mode toggle (compact dot ↔ detailed price card) -->
+      <div class="map-pinmode" aria-label="Style des pins">
+        <button id="pinmode-toggle" type="button" title="Vue détaillée" aria-pressed="false">
+          <i class="fa-solid fa-circle-dot" aria-hidden="true"></i>
+        </button>
+      </div>
 
-      <section class="control-bar">
-        <label>
-          Filtre
-          <select id="priority-filter">
-            <option value="all">Toutes</option>
-            <option value="top">Priorité A</option>
-            <option value="direct">Régie directe</option>
-          </select>
-        </label>
-
-        <label>
-          Trier
-          <select id="sort-by">
-            <option value="score">Score</option>
-            <option value="price">Loyer</option>
-            <option value="area">Zone</option>
-            <option value="date">Date de publication</option>
-          </select>
-        </label>
-
-        <label class="search-wrap">
-          Recherche
-          <input id="search-box" type="search" placeholder="adresse, type, zone…" />
-        </label>
-      </section>
-
-      <section class="view-tabs-wrap">
-        <nav class="view-tabs" aria-label="Changer de vue">
-          <button id="tab-table" class="view-tab active" data-view="table" type="button">Vue tableau</button>
-          <button id="tab-kanban" class="view-tab" data-view="kanban" type="button">Vue kanban</button>
-        </nav>
-
-        <div id="panel-table" class="view-panel active">
-          <section class="desktop-board">
-            <div class="section-head compact">
-              <h2>Table détaillée</h2>
-              <p>Vue complète pour tri fin et prise de notes.</p>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Priorité</th>
-                  <th>Score</th>
-                  <th>Image</th>
-                  <th>Bien</th>
-                  <th>Loyer total</th>
-                  <th>Publié</th>
-                  <th>Distance travail</th>
-                  <th>Statut</th>
-                  <th>Notes</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="rows"></tbody>
-            </table>
-          </section>
-
-          <section class="mobile-board" id="mobile-rows"></section>
+      <!-- Default mode: Profils + Quick sorts -->
+      <aside id="filters-panel" class="panel filters-panel" aria-label="Filtres">
+        <div class="panel-section">
+          <div class="panel-section-h">
+            <span class="micro-label">Profils</span>
+            <button id="profiles-add" class="link-btn" type="button">+ nouveau</button>
+          </div>
+          <div id="profiles-chips" class="prof-chips"></div>
         </div>
-
-        <div id="panel-kanban" class="view-panel">
-          <section class="kanban-wrap">
-            <div class="section-head">
-              <h2>Kanban pipeline</h2>
-              <p>Vision rapide par statut + actions directes.</p>
-            </div>
-            <div id="kanban-board" class="kanban-board"></div>
-          </section>
+        <div class="panel-divider"></div>
+        <div class="panel-section">
+          <span class="micro-label">Non lues</span>
+          <label class="checkrow">
+            <input type="checkbox" id="filter-unread" />
+            <span>Afficher uniquement les non lues</span>
+          </label>
         </div>
-      </section>
-    </main>
+      </aside>
 
+      <aside id="quick-sorts-panel" class="panel quick-sorts-panel" aria-label="Tri rapide">
+        <div class="qs-section">
+          <div class="qs-section-h">
+            <span class="micro-label">Vue rapide</span>
+          </div>
+          <div id="quick-sort-actions" class="qs-actions"></div>
+        </div>
+        <div class="panel-divider"></div>
+        <div class="qs-section">
+          <div class="qs-section-h">
+            <span class="micro-label">Trouvées récemment</span>
+          </div>
+          <div id="quick-sort-recency" class="qs-recency-row"></div>
+        </div>
+      </aside>
+
+      <!-- Listings panel -->
+      <aside id="listings-panel" class="panel app-listings" aria-label="Annonces">
+        <header class="listings-head">
+          <span id="listings-count" class="listings-count"><b>0</b> annonces</span>
+          <button id="listings-clear" class="icon-btn" type="button" title="Tout marquer lu et archiver">
+            <i class="fa-solid fa-broom" aria-hidden="true"></i>
+          </button>
+          <select id="listings-sort" class="select-sm">
+            <option value="recent">Plus récentes</option>
+            <option value="score">Meilleur score</option>
+            <option value="price-asc">Prix ↑</option>
+            <option value="price-desc">Prix ↓</option>
+          </select>
+        </header>
+        <div id="listings-rows" class="listings-rows"></div>
+      </aside>
+
+      <!-- Listing detail floating panel -->
+      <aside id="detail-panel" class="panel detail-panel hidden" aria-label="Détail annonce"></aside>
+
+      <!-- Edit-mode panels -->
+      <aside id="edit-panel-left" class="panel edit-panel-left hidden" aria-label="Édition profil — paramètres"></aside>
+      <aside id="edit-panel-right" class="panel edit-panel-right hidden" aria-label="Édition profil — zones"></aside>
+
+      <!-- Scan progress (centered) -->
+      <div id="scan-progress" class="scan-progress hidden" role="status" aria-live="polite">
+        <div class="scan-progress-source"></div>
+        <div class="scan-progress-counter"></div>
+        <div class="scan-progress-bar"></div>
+      </div>
+
+      <!-- Bottom bar -->
+      <div id="bottombar" class="app-bottombar">
+        <span class="bottombar-stats">
+          <span><b id="stats-total">0</b> annonces</span>
+          <span class="sep">·</span>
+          <span><b id="stats-unread">0</b> non lues</span>
+        </span>
+      </div>
+
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script type="module" src="/dashboard/app.js"></script>
   </body>
 </html>
