@@ -81,4 +81,41 @@
   --topbar-h: 52px;
   --content-max: 1320px;
   --gutter: 24px;
+
+  /* === Floating-panel design (map shell) === */
+  --panel-bg: #ffffff;
+  --panel-line: rgba(15, 23, 42, 0.10);
+  --panel-line-strong: rgba(15, 23, 42, 0.18);
+  --panel-shadow: 0 6px 20px -8px rgba(15, 23, 42, 0.18),
+                  0 1px 0 rgba(15, 23, 42, 0.04),
+                  0 0 0 0.5px rgba(15, 23, 42, 0.10);
+  --panel-shadow-lg: 0 18px 48px -16px rgba(15, 23, 42, 0.30),
+                     0 2px 6px -2px rgba(15, 23, 42, 0.10),
+                     0 0 0 0.5px rgba(15, 23, 42, 0.10);
+  --panel-radius: 10px;
+  --ink: #0f172a;
+  --ink-muted: #475569;
+  --ink-faint: #64748b;
+
+  /* Status tones (used by quick-sort buttons & badges) */
+  --tone-amber-bg: #fffbeb;
+  --tone-amber-border: #fde68a;
+  --tone-amber-icon-bg: #fef3c7;
+  --tone-amber-icon-fg: #b45309;
+  --tone-amber-count-bg: #fde68a;
+  --tone-amber-count-fg: #78350f;
+
+  --tone-green-bg: #f0fdf4;
+  --tone-green-border: #bbf7d0;
+  --tone-green-icon-bg: #dcfce7;
+  --tone-green-icon-fg: #166534;
+  --tone-green-count-bg: #bbf7d0;
+  --tone-green-count-fg: #14532d;
+
+  --tone-slate-bg: #f1f5f9;
+  --tone-slate-border: #cbd5e1;
+  --tone-slate-icon-bg: #e2e8f0;
+  --tone-slate-icon-fg: #334155;
+  --tone-slate-count-bg: #cbd5e1;
+  --tone-slate-count-fg: #1e293b;
 }

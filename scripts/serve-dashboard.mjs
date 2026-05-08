@@ -192,21 +192,28 @@ function readBody(req) {
   });
 }
 
-async function updateStatus(profile, id, status, notes) {
+async function updateStatus(profile, { ids, status, notes }) {
   const paths = await ensureProfileStorage(profile);
   const tracker = await readJsonSafe(paths.trackerPath, null);
-  if (!tracker || !Array.isArray(tracker.listings)) return false;
+  if (!tracker || !Array.isArray(tracker.listings)) return 0;
 
-  const item = tracker.listings.find((x) => String(x.id) === String(id));
-  if (!item) return false;
+  const idSet = new Set(ids.map((id) => String(id)));
+  const now = new Date().toISOString();
+  let updated = 0;
 
-  if (status) item.status = status;
-  if (typeof notes === 'string') item.notes = notes;
-  item.updatedAt = new Date().toISOString();
+  for (const item of tracker.listings) {
+    if (!idSet.has(String(item.id))) continue;
+    if (status) item.status = status;
+    if (typeof notes === 'string' && idSet.size === 1) item.notes = notes;
+    item.updatedAt = now;
+    updated += 1;
+  }
 
-  tracker.updatedAt = new Date().toISOString();
-  await fs.writeFile(paths.trackerPath, JSON.stringify(tracker, null, 2));
-  return true;
+  if (updated > 0) {
+    tracker.updatedAt = now;
+    await writeJsonAtomic(paths.trackerPath, tracker);
+  }
+  return updated;
 }
 
 async function togglePin(profile, id) {
@@ -317,6 +324,14 @@ async function listProfiles() {
   }
 }
 
+function sanitizeProfileColor(value) {
+  if (!value) return null;
+  const v = String(value).trim();
+  if (/^#[0-9a-f]{3}$/i.test(v) || /^#[0-9a-f]{6}$/i.test(v) || /^#[0-9a-f]{8}$/i.test(v)) return v;
+  if (/^hsl\(\s*-?\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%\s*\)$/i.test(v)) return v;
+  return null;
+}
+
 function buildConfigFromPayload(payload) {
   const shortTitle = String(payload.shortTitle || '').trim();
   const areas = Array.isArray(payload.areas) ? payload.areas.map((a) => {
@@ -333,6 +348,7 @@ function buildConfigFromPayload(payload) {
   const filters = payload.filters || {};
   const sources = payload.sources || {};
   const preferences = payload.preferences || {};
+  const color = sanitizeProfileColor(payload.color);
 
   const maxPublishedAgeRaw = filters.maxPublishedAgeDays;
   const maxPublishedAgeDays =
@@ -340,7 +356,7 @@ function buildConfigFromPayload(payload) {
       ? null
       : Number(maxPublishedAgeRaw);
 
-  return {
+  const cfg = {
     name: shortTitle,
     shortTitle,
     areas,
@@ -373,6 +389,9 @@ function buildConfigFromPayload(payload) {
       workplaceAddress: preferences.workplaceAddress || null
     }
   };
+
+  if (color) cfg.color = color;
+  return cfg;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -388,6 +407,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, payload);
   }
 
+
   if (req.method === 'GET' && u.pathname === '/api/profile/detail') {
     const slug = sanitizeProfile(u.searchParams.get('profile') || '');
     const configPath = path.join(PROFILES_DATA_DIR, slug, 'watch-config.json');
@@ -398,6 +418,7 @@ const server = http.createServer(async (req, res) => {
       profile: {
         slug,
         shortTitle: cfg.shortTitle || slug,
+        color: cfg.color || null,
         areas: cfg.areas || [],
         sources: cfg.sources || {},
         filters: cfg.filters || {},
@@ -525,8 +546,14 @@ const server = http.createServer(async (req, res) => {
       if (!isValidStatus(body.status)) {
         return sendJson(res, 400, { ok: false, error: 'Statut invalide' });
       }
-      const ok = await updateStatus(profile, body.id, body.status, body.notes);
-      return sendJson(res, ok ? 200 : 404, { ok });
+      const ids = Array.isArray(body.ids)
+        ? body.ids.filter((id) => typeof id === 'string' || typeof id === 'number')
+        : (body.id != null ? [body.id] : []);
+      if (!ids.length) {
+        return sendJson(res, 400, { ok: false, error: 'id ou ids manquant' });
+      }
+      const updated = await updateStatus(profile, { ids, status: body.status, notes: body.notes });
+      return sendJson(res, updated > 0 ? 200 : 404, { ok: updated > 0, updated });
     } catch (err) {
       return sendJson(res, 400, { ok: false, error: err.message });
     }

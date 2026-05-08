@@ -3164,6 +3164,7 @@ async function main() {
   normalizeListingImageFields(merged);
 
   for (const trackerEntry of merged) {
+    if (!trackerEntry.active || trackerEntry.display === false) continue;
     emitEvent({
       type: 'listing',
       listing: {

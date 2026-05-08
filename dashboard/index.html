@@ -13,8 +13,6 @@
     />
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
     <link rel="stylesheet" href="/dashboard/tokens.css" />
@@ -22,96 +20,120 @@
     <link rel="stylesheet" href="/dashboard/styles.css" />
   </head>
   <body class="app-body">
-    <div class="app-shell">
+    <div id="app-shell" class="app-shell">
 
       <main id="map-container" class="app-map" aria-label="Carte des annonces">
         <div id="map" class="map-canvas"></div>
       </main>
 
+      <!-- Top bar -->
       <header class="app-topbar">
-        <a href="/" class="brand"><span class="brand-dot"></span>Apartment Ops</a>
-        <span class="grow"></span>
-        <span id="scan-status" class="scan-status hidden"></span>
-        <button id="scan-button" class="btn btn-primary btn-sm" type="button"><i class="fa-solid fa-satellite-dish"></i> Scanner</button>
+        <a href="/" class="brand-pill">
+          <span class="brand-dot"></span>
+          <span class="brand-name">Apartment Ops</span>
+          <span class="brand-sep">/</span>
+          <span class="brand-sub">flats radar</span>
+        </a>
+        <span id="edit-mode-badge" class="edit-mode-badge hidden">Mode édition</span>
+        <span class="topbar-grow"></span>
+        <span id="sync-pill" class="sync-pill"><span class="dot"></span><span id="sync-pill-text">synchronisé</span></span>
+        <button id="scan-button" class="scanner-btn" type="button">
+          <i class="fa-solid fa-satellite-dish" aria-hidden="true"></i>
+          <span id="scan-button-text">Scanner</span>
+        </button>
       </header>
 
-      <aside id="sidebar" class="app-sidebar" aria-label="Filtres">
-        <section class="sidebar-section" data-section="profiles">
-          <header class="sidebar-section-head">Profils</header>
-          <div class="sidebar-section-body" id="filter-profiles"></div>
-        </section>
+      <!-- Map zoom controls -->
+      <div class="map-zoom" aria-label="Zoom carte">
+        <button id="zoom-in" type="button" title="Zoom +">+</button>
+        <button id="zoom-out" type="button" title="Zoom −">−</button>
+      </div>
 
-        <section class="sidebar-section" data-section="recent">
-          <header class="sidebar-section-head">Trouvées récemment</header>
-          <div class="sidebar-section-body">
-            <select id="filter-recent" class="select-trigger">
-              <option value="any">N'importe quand</option>
-              <option value="1d">Dernières 24h</option>
-              <option value="3d">3 derniers jours</option>
-              <option value="7d">7 derniers jours</option>
-              <option value="14d">14 derniers jours</option>
-            </select>
+      <!-- Pin-mode toggle (compact dot ↔ detailed price card) -->
+      <div class="map-pinmode" aria-label="Style des pins">
+        <button id="pinmode-toggle" type="button" title="Vue détaillée" aria-pressed="false">
+          <i class="fa-solid fa-circle-dot" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <!-- Default mode: Profils + Quick sorts -->
+      <aside id="filters-panel" class="panel filters-panel" aria-label="Filtres">
+        <div class="panel-section">
+          <div class="panel-section-h">
+            <span class="micro-label">Profils</span>
+            <button id="profiles-add" class="link-btn" type="button">+ nouveau</button>
           </div>
-        </section>
-
-        <section class="sidebar-section" data-section="unread">
-          <header class="sidebar-section-head">Non lues</header>
-          <div class="sidebar-section-body">
-            <label class="toggle">
-              <input type="checkbox" id="filter-unread" />
-              <span>Afficher uniquement les non lues</span>
-            </label>
-          </div>
-        </section>
-
-        <section class="sidebar-section" data-section="status">
-          <header class="sidebar-section-head">Statut</header>
-          <div class="sidebar-section-body" id="filter-status"></div>
-        </section>
-
-        <section class="sidebar-section" data-section="priority">
-          <header class="sidebar-section-head">Priorité</header>
-          <div class="sidebar-section-body" id="filter-priority"></div>
-        </section>
-
-        <section class="sidebar-section" data-section="sources">
-          <header class="sidebar-section-head">Sources</header>
-          <div class="sidebar-section-body" id="filter-sources"></div>
-        </section>
-
-        <footer class="sidebar-foot">
-          <button id="settings-button" class="btn btn-ghost btn-sm" type="button"><i class="fa-solid fa-gear"></i> Paramètres</button>
-        </footer>
+          <div id="profiles-chips" class="prof-chips"></div>
+        </div>
+        <div class="panel-divider"></div>
+        <div class="panel-section">
+          <span class="micro-label">Non lues</span>
+          <label class="checkrow">
+            <input type="checkbox" id="filter-unread" />
+            <span>Afficher uniquement les non lues</span>
+          </label>
+        </div>
       </aside>
 
+      <aside id="quick-sorts-panel" class="panel quick-sorts-panel" aria-label="Tri rapide">
+        <div class="qs-section">
+          <div class="qs-section-h">
+            <span class="micro-label">Vue rapide</span>
+          </div>
+          <div id="quick-sort-actions" class="qs-actions"></div>
+        </div>
+        <div class="panel-divider"></div>
+        <div class="qs-section">
+          <div class="qs-section-h">
+            <span class="micro-label">Trouvées récemment</span>
+          </div>
+          <div id="quick-sort-recency" class="qs-recency-row"></div>
+        </div>
+      </aside>
+
+      <!-- Listings panel -->
+      <aside id="listings-panel" class="panel app-listings" aria-label="Annonces">
+        <header class="listings-head">
+          <span id="listings-count" class="listings-count"><b>0</b> annonces</span>
+          <button id="listings-clear" class="icon-btn" type="button" title="Tout marquer lu et archiver">
+            <i class="fa-solid fa-broom" aria-hidden="true"></i>
+          </button>
+          <select id="listings-sort" class="select-sm">
+            <option value="recent">Plus récentes</option>
+            <option value="score">Meilleur score</option>
+            <option value="price-asc">Prix ↑</option>
+            <option value="price-desc">Prix ↓</option>
+          </select>
+        </header>
+        <div id="listings-rows" class="listings-rows"></div>
+      </aside>
+
+      <!-- Listing detail floating panel -->
+      <aside id="detail-panel" class="panel detail-panel hidden" aria-label="Détail annonce"></aside>
+
+      <!-- Edit-mode panels -->
+      <aside id="edit-panel-left" class="panel edit-panel-left hidden" aria-label="Édition profil — paramètres"></aside>
+      <aside id="edit-panel-right" class="panel edit-panel-right hidden" aria-label="Édition profil — zones"></aside>
+
+      <!-- Scan progress (centered) -->
       <div id="scan-progress" class="scan-progress hidden" role="status" aria-live="polite">
         <div class="scan-progress-source"></div>
         <div class="scan-progress-counter"></div>
         <div class="scan-progress-bar"></div>
       </div>
 
-      <aside id="listings-panel" class="app-listings" aria-label="Annonces">
-        <header class="listings-head">
-          <span id="listings-count">0 annonces</span>
-        </header>
-        <div id="listings-rows" class="listings-rows"></div>
-      </aside>
-
-    </div>
-
-    <div id="settings-drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-labelledby="settings-drawer-title">
-      <div class="drawer-overlay" data-drawer-close></div>
-      <div class="drawer-panel">
-        <header class="drawer-head">
-          <h2 id="settings-drawer-title">Profils</h2>
-          <button class="drawer-close" type="button" data-drawer-close aria-label="Fermer"><i class="fa-solid fa-xmark"></i></button>
-        </header>
-        <div id="drawer-body" class="drawer-body"></div>
+      <!-- Bottom bar -->
+      <div id="bottombar" class="app-bottombar">
+        <span class="bottombar-stats">
+          <span><b id="stats-total">0</b> annonces</span>
+          <span class="sep">·</span>
+          <span><b id="stats-unread">0</b> non lues</span>
+        </span>
       </div>
+
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script type="module" src="/dashboard/app.js"></script>
   </body>
 </html>
