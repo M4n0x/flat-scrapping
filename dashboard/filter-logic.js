@@ -1,0 +1,40 @@
+export function defaultFilterState() {
+  return {
+    hiddenProfiles: new Set(),
+    recent: 'any',
+    unreadOnly: false,
+    statuses: new Set(['sorting', 'pursuing']),
+    // Priority and source filters are no longer surfaced in the UI;
+    // leave as null/null so applyFilters short-circuits to "allow all".
+    priorities: null,
+    sources: null
+  };
+}
+
+const RECENT_TO_MS = {
+  any: null,
+  '1d': 24 * 60 * 60 * 1000,
+  '3d': 3 * 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '14d': 14 * 24 * 60 * 60 * 1000
+};
+
+export function applyFilters(listings, state, nowMs = Date.now()) {
+  const recentWindow = RECENT_TO_MS[state.recent] ?? null;
+  return listings.filter((listing) => {
+    if (state.hiddenProfiles && state.hiddenProfiles.has(listing.profileSlug)) return false;
+    if (recentWindow != null) {
+      const iso = listing.publishedAt || listing.firstSeenAt;
+      const t = iso ? Date.parse(iso) : NaN;
+      if (!Number.isFinite(t) || nowMs - t > recentWindow) return false;
+    }
+    if (state.unreadOnly && listing.viewedAt) return false;
+    if (state.statuses && !state.statuses.has(listing.status)) return false;
+    if (state.priorities) {
+      if (!listing.priority) return false;
+      if (!state.priorities.has(listing.priority)) return false;
+    }
+    if (state.sources && !state.sources.has(listing.source)) return false;
+    return true;
+  });
+}

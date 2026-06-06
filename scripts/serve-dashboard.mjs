@@ -4,6 +4,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildMapListingsPayload } from './map-listings.mjs';
+import { migrateTracker, TRACKER_SCHEMA_VERSION } from './tracker-migration.mjs';
+import { isValidStatus } from './status.mjs';
+import { applyViewedAt } from './mark-viewed.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +18,7 @@ const SCRAPE_SCRIPT = path.join(ROOT, 'scripts', 'scrape-immobilier.mjs');
 
 const PORT = Number(process.env.PORT || 8787);
 const scanAllJobs = new Map();
+const activeScans = new Map(); // slug -> ChildProcess
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -63,6 +67,12 @@ async function readJsonSafe(filePath, fallback) {
   } catch {
     return fallback;
   }
+}
+
+async function writeJsonAtomic(filePath, value) {
+  const tmpPath = `${filePath}.tmp`;
+  await fs.writeFile(tmpPath, JSON.stringify(value, null, 2));
+  await fs.rename(tmpPath, filePath);
 }
 
 async function fileExists(filePath) {
@@ -134,6 +144,14 @@ async function ensureProfileStorage(profile) {
     await fs.writeFile(paths.configPath, JSON.stringify(cfg, null, 2));
   }
 
+  const existingTracker = await readJsonSafe(paths.trackerPath, null);
+  if (existingTracker) {
+    const { tracker, changed } = migrateTracker(existingTracker);
+    if (changed) {
+      await writeJsonAtomic(paths.trackerPath, tracker);
+    }
+  }
+
   return paths;
 }
 
@@ -174,21 +192,28 @@ function readBody(req) {
   });
 }
 
-async function updateStatus(profile, id, status, notes) {
+async function updateStatus(profile, { ids, status, notes }) {
   const paths = await ensureProfileStorage(profile);
   const tracker = await readJsonSafe(paths.trackerPath, null);
-  if (!tracker || !Array.isArray(tracker.listings)) return false;
+  if (!tracker || !Array.isArray(tracker.listings)) return 0;
 
-  const item = tracker.listings.find((x) => String(x.id) === String(id));
-  if (!item) return false;
+  const idSet = new Set(ids.map((id) => String(id)));
+  const now = new Date().toISOString();
+  let updated = 0;
 
-  if (status) item.status = status;
-  if (typeof notes === 'string') item.notes = notes;
-  item.updatedAt = new Date().toISOString();
+  for (const item of tracker.listings) {
+    if (!idSet.has(String(item.id))) continue;
+    if (status) item.status = status;
+    if (typeof notes === 'string' && idSet.size === 1) item.notes = notes;
+    item.updatedAt = now;
+    updated += 1;
+  }
 
-  tracker.updatedAt = new Date().toISOString();
-  await fs.writeFile(paths.trackerPath, JSON.stringify(tracker, null, 2));
-  return true;
+  if (updated > 0) {
+    tracker.updatedAt = now;
+    await writeJsonAtomic(paths.trackerPath, tracker);
+  }
+  return updated;
 }
 
 async function togglePin(profile, id) {
@@ -235,8 +260,8 @@ async function deleteListing(profile, id) {
     latest.all = latest.all.filter((x) => String(x.id) !== String(id));
     latest.matching = (latest.matching || []).filter((x) => String(x.id) !== String(id));
     latest.newListings = (latest.newListings || []).filter((x) => String(x.id) !== String(id));
-    latest.totalCount = (latest.all || []).filter((x) => !x.isRemoved).length;
-    latest.removedCount = (latest.all || []).filter((x) => x.isRemoved).length;
+    latest.totalCount = (latest.all || []).filter((x) => x.status !== 'archived').length;
+    latest.removedCount = (latest.all || []).filter((x) => x.status === 'archived').length;
     latest.matchingCount = latest.matching.length;
     latest.newCount = latest.newListings.length;
     await fs.writeFile(paths.latestPath, JSON.stringify(latest, null, 2));
@@ -280,7 +305,7 @@ async function listProfiles() {
       const latestPath = path.join(PROFILES_DATA_DIR, entry.name, 'latest-listings.json');
       const tracker = await readJsonSafe(trackerPath, { listings: [] });
       const latest = await readJsonSafe(latestPath, {});
-      const listingsCount = (tracker.listings || []).filter((x) => !x.isRemoved).length;
+      const listingsCount = (tracker.listings || []).filter((x) => x.status !== 'archived').length;
       profiles.push({
         slug: entry.name,
         name: cfg.name || entry.name,
@@ -299,6 +324,14 @@ async function listProfiles() {
   }
 }
 
+function sanitizeProfileColor(value) {
+  if (!value) return null;
+  const v = String(value).trim();
+  if (/^#[0-9a-f]{3}$/i.test(v) || /^#[0-9a-f]{6}$/i.test(v) || /^#[0-9a-f]{8}$/i.test(v)) return v;
+  if (/^hsl\(\s*-?\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%\s*\)$/i.test(v)) return v;
+  return null;
+}
+
 function buildConfigFromPayload(payload) {
   const shortTitle = String(payload.shortTitle || '').trim();
   const areas = Array.isArray(payload.areas) ? payload.areas.map((a) => {
@@ -315,6 +348,7 @@ function buildConfigFromPayload(payload) {
   const filters = payload.filters || {};
   const sources = payload.sources || {};
   const preferences = payload.preferences || {};
+  const color = sanitizeProfileColor(payload.color);
 
   const maxPublishedAgeRaw = filters.maxPublishedAgeDays;
   const maxPublishedAgeDays =
@@ -322,7 +356,7 @@ function buildConfigFromPayload(payload) {
       ? null
       : Number(maxPublishedAgeRaw);
 
-  return {
+  const cfg = {
     name: shortTitle,
     shortTitle,
     areas,
@@ -355,6 +389,9 @@ function buildConfigFromPayload(payload) {
       workplaceAddress: preferences.workplaceAddress || null
     }
   };
+
+  if (color) cfg.color = color;
+  return cfg;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -370,6 +407,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, payload);
   }
 
+
   if (req.method === 'GET' && u.pathname === '/api/profile/detail') {
     const slug = sanitizeProfile(u.searchParams.get('profile') || '');
     const configPath = path.join(PROFILES_DATA_DIR, slug, 'watch-config.json');
@@ -380,6 +418,7 @@ const server = http.createServer(async (req, res) => {
       profile: {
         slug,
         shortTitle: cfg.shortTitle || slug,
+        color: cfg.color || null,
         areas: cfg.areas || [],
         sources: cfg.sources || {},
         filters: cfg.filters || {},
@@ -403,7 +442,10 @@ const server = http.createServer(async (req, res) => {
       await fs.mkdir(profileDir, { recursive: true });
       const cfg = buildConfigFromPayload(payload);
       await fs.writeFile(path.join(profileDir, 'watch-config.json'), JSON.stringify(cfg, null, 2));
-      await fs.writeFile(path.join(profileDir, 'tracker.json'), JSON.stringify({ listings: [], statuses: ['À contacter', 'Visite', 'Dossier', 'Relance', 'Accepté', 'Refusé', 'Sans réponse'], updatedAt: new Date().toISOString() }, null, 2));
+      await writeJsonAtomic(
+        path.join(profileDir, 'tracker.json'),
+        { schemaVersion: TRACKER_SCHEMA_VERSION, listings: [], updatedAt: new Date().toISOString() }
+      );
       return sendJson(res, 201, { ok: true, slug });
     } catch (err) {
       return sendJson(res, 400, { ok: false, error: err.message });
@@ -454,7 +496,7 @@ const server = http.createServer(async (req, res) => {
     const paths = await ensureProfileStorage(profile);
 
     const [tracker, latest, config] = await Promise.all([
-      readJsonSafe(paths.trackerPath, { listings: [], statuses: [] }),
+      readJsonSafe(paths.trackerPath, { schemaVersion: TRACKER_SCHEMA_VERSION, listings: [] }),
       readJsonSafe(paths.latestPath, { all: [], matching: [], generatedAt: null, newCount: 0 }),
       readJsonSafe(paths.configPath, { areas: [] })
     ]);
@@ -475,14 +517,43 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, { profile, tracker, latest, areas });
   }
 
+  if (req.method === 'POST' && u.pathname === '/api/mark-viewed') {
+    const profile = getProfileFromRequest(u);
+
+    try {
+      await ensureProfileStorage(profile);
+      const raw = await readBody(req);
+      const body = JSON.parse(raw || '{}');
+      const ids = Array.isArray(body.ids) ? body.ids : [];
+
+      const trackerPath = path.join(PROFILES_DATA_DIR, profile, 'tracker.json');
+      const tracker = await readJsonSafe(trackerPath, { schemaVersion: TRACKER_SCHEMA_VERSION, listings: [] });
+      const { tracker: next, updated } = applyViewedAt(tracker, ids, new Date().toISOString());
+      if (updated > 0) await writeJsonAtomic(trackerPath, next);
+
+      return sendJson(res, 200, { ok: true, updated });
+    } catch (err) {
+      return sendJson(res, 400, { ok: false, error: err.message });
+    }
+  }
+
   if (req.method === 'POST' && u.pathname === '/api/update-status') {
     const profile = getProfileFromRequest(u);
 
     try {
       const raw = await readBody(req);
       const body = JSON.parse(raw || '{}');
-      const ok = await updateStatus(profile, body.id, body.status, body.notes);
-      return sendJson(res, ok ? 200 : 404, { ok });
+      if (!isValidStatus(body.status)) {
+        return sendJson(res, 400, { ok: false, error: 'Statut invalide' });
+      }
+      const ids = Array.isArray(body.ids)
+        ? body.ids.filter((id) => typeof id === 'string' || typeof id === 'number')
+        : (body.id != null ? [body.id] : []);
+      if (!ids.length) {
+        return sendJson(res, 400, { ok: false, error: 'id ou ids manquant' });
+      }
+      const updated = await updateStatus(profile, { ids, status: body.status, notes: body.notes });
+      return sendJson(res, updated > 0 ? 200 : 404, { ok: updated > 0, updated });
     } catch (err) {
       return sendJson(res, 400, { ok: false, error: err.message });
     }
@@ -498,6 +569,88 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       return sendJson(res, 500, { ok: false, error: err.message });
     }
+  }
+
+  if (req.method === 'GET' && u.pathname === '/api/run-scan-stream') {
+    const profile = getProfileFromRequest(u);
+
+    if (activeScans.has(profile)) {
+      return sendJson(res, 409, { ok: false, error: 'Un scan est déjà en cours pour ce profil' });
+    }
+
+    await ensureProfileStorage(profile);
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    });
+    res.write(': stream open\n\n');
+
+    const { spawn } = await import('node:child_process');
+    const child = spawn(process.execPath, [SCRAPE_SCRIPT, `--profile=${profile}`, '--events-fd=3'], {
+      cwd: ROOT,
+      stdio: ['ignore', 'pipe', 'pipe', 'pipe']
+    });
+    activeScans.set(profile, child);
+
+    // Drain stdout/stderr so the child doesn't block, but ignore the human-readable
+    // logs (they go to the cron path; here we only care about NDJSON on fd 3).
+    child.stdout.on('data', () => {});
+    child.stderr.on('data', () => {});
+
+    let buffer = '';
+    let scanDoneSent = false;
+
+    const sendFrame = (payload) => {
+      try {
+        res.write('data: ' + JSON.stringify(payload) + '\n\n');
+      } catch {
+        // client may have disconnected; the close handler will clean up
+      }
+    };
+
+    child.stdio[3].on('data', (chunk) => {
+      buffer += chunk.toString('utf8');
+      let newlineIndex;
+      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        if (!line) continue;
+        let event;
+        try {
+          event = JSON.parse(line);
+        } catch {
+          continue; // skip malformed lines
+        }
+        sendFrame(event);
+        if (event.type === 'scan-done' || event.type === 'scan-error') scanDoneSent = true;
+      }
+    });
+
+    const cleanup = () => {
+      if (activeScans.get(profile) === child) activeScans.delete(profile);
+    };
+
+    child.on('exit', (code, signal) => {
+      if (!scanDoneSent) {
+        sendFrame({
+          type: code === 0 ? 'scan-done' : 'scan-error',
+          message: code === 0 ? 'ok' : `Scan exited (code=${code} signal=${signal || ''})`,
+          at: new Date().toISOString()
+        });
+      }
+      cleanup();
+      try { res.end(); } catch {}
+    });
+
+    req.on('close', () => {
+      if (!child.killed) child.kill('SIGTERM');
+      cleanup();
+    });
+
+    return;
   }
 
   if (req.method === 'POST' && u.pathname === '/api/run-scan-all') {
@@ -563,8 +716,8 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (req.method === 'GET' && (u.pathname === '/' || u.pathname === '/dashboard' || u.pathname === '/dashboard/')) {
-    return serveFile(res, path.join(DASHBOARD_DIR, 'home.html'));
+  if (req.method === 'GET' && u.pathname === '/') {
+    return serveFile(res, path.join(DASHBOARD_DIR, 'index.html'));
   }
 
   const rootProfileMatch = u.pathname.match(/^\/([a-z0-9-]+)\/?$/i);
@@ -574,10 +727,10 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  const profileTrailingSlashMatch = u.pathname.match(/^\/([a-z0-9-]+)\/dashboard\/$/i);
-  if (req.method === 'GET' && profileTrailingSlashMatch) {
-    const profile = sanitizeProfile(profileTrailingSlashMatch[1]);
-    res.writeHead(302, { location: `/${profile}/dashboard` });
+  const profileDashboardMatch = u.pathname.match(/^\/([a-z0-9-]+)\/dashboard\/?$/i);
+  if (req.method === 'GET' && profileDashboardMatch) {
+    const slug = profileDashboardMatch[1];
+    res.writeHead(302, { Location: '/?profiles=' + encodeURIComponent(slug) });
     return res.end();
   }
 
@@ -591,17 +744,6 @@ const server = http.createServer(async (req, res) => {
     return serveFile(res, path.join(DASHBOARD_DIR, profileAssetMatch[2]));
   }
 
-  const dashboardMatch = u.pathname.match(/^\/([a-z0-9-]+)\/dashboard(?:\/(.*))?$/i);
-  if (req.method === 'GET' && dashboardMatch) {
-    const profile = sanitizeProfile(dashboardMatch[1]);
-    const relative = dashboardMatch[2] || 'index.html';
-
-    if (relative === 'index.html') {
-      await ensureProfileStorage(profile);
-    }
-
-    return serveFile(res, path.join(DASHBOARD_DIR, relative));
-  }
 
   if (req.method === 'GET' && u.pathname.startsWith('/data/')) {
     const relative = u.pathname.replace('/data/', '');

@@ -15,12 +15,22 @@ apartment-search/
 │   ├── scrape-immobilier.mjs   # Multi-source scraper (~2500 lines)
 │   └── recompute-distances.mjs # Distance/travel time recalculation
 ├── dashboard/
-│   ├── home.html / home.js / home.css  # Home page + profile management
-│   ├── index.html / app.js / styles.css # Per-profile dashboard
+│   ├── index.html              # App shell — single entry point for the whole app
+│   ├── app.js                  # Root bootstrap + view orchestration
+│   ├── map.js                  # Leaflet map, pin rendering, popup
+│   ├── sidebar.js              # Filter sidebar + per-profile toggles
+│   ├── listings-panel.js       # Right-side listings table/list
+│   ├── scan.js                 # SSE scan stream, live pin drops
+│   ├── settings-drawer.js      # Left-sliding profile CRUD drawer
+│   ├── filter-logic.js         # Pure filter/sort helpers (also tested)
+│   ├── map-utils.js            # Geo utilities (distance, bounds)
+│   ├── tokens.css              # Design tokens
+│   ├── components.css          # Reusable component styles
+│   └── styles.css              # Layout and page-level styles
 ├── data/
 │   └── profiles/{slug}/        # One folder per profile (gitignored)
 │       ├── watch-config.json   # Profile configuration
-│       ├── tracker.json        # Tracked listings (persistent)
+│       ├── tracker.json        # Tracked listings (schemaVersion: 2)
 │       ├── latest-listings.json # Latest scan results
 │       ├── geocode-cache.json  # Geocoding cache
 │       └── route-cache.json    # Travel route cache
@@ -83,10 +93,12 @@ Each listing gets a 0-100 score based on profile criteria (budget, rooms, surfac
 - **B** — low-priority or non-matching listing
 
 ### Status Pipeline
-`À contacter → Visite → Dossier → Relance → Accepté / Refusé / Sans réponse`
+Three keys: `sorting → pursuing → archived`.
+
+**Legacy migration:** the old 7-state French pipeline (`À contacter`, `Visite`, `Dossier`, `Relance`, `Accepté`, `Refusé`, `Sans réponse`) is mapped to the 3 new keys on first access. `À contacter` → `sorting`; all active-pursuit states (`Visite`, `Dossier`, `Relance`, `Accepté`) → `pursuing`; terminal states (`Refusé`, `Sans réponse`) → `archived`. Migration runs lazily in `ensureProfileStorage()` (server) and on tracker read in the scraper (cron path). Tracker is at `schemaVersion: 2` after migration.
 
 ### Removed Listings
-When a listing hasn't appeared for N scans (`missingScansBeforeRemoved`), it's marked `isRemoved: true`. Shown in the kanban under "Retirées".
+When a listing hasn't appeared for N consecutive scans (`missingScansBeforeRemoved`), it is automatically set to `status: 'archived'`. The threshold is configurable per profile (default: 2).
 
 ## Environment Variables
 
@@ -111,16 +123,19 @@ All data routes take `?profile={slug}`.
 | POST | `/api/profile/update` | Update a profile |
 | POST | `/api/profile/delete` | Delete a profile and all its data |
 | GET | `/api/state?profile=` | Tracker + latest scan results |
-| POST | `/api/update-status?profile=` | Change listing status/notes |
+| GET | `/api/map-listings?profile=` | All listings for the map (status, priority, score, firstSeenAt, viewedAt). Not pre-filtered by status — returns all. |
+| POST | `/api/update-status?profile=` | Change listing status/notes. `status` must be one of `sorting \| pursuing \| archived`. |
+| POST | `/api/mark-viewed` | Mark listings as viewed (sets `viewedAt`). Body: `{ profile, ids: [] }`. |
 | POST | `/api/delete-listing?profile=` | Delete a listing from tracker |
-| POST | `/api/run-scan?profile=` | Trigger a scan |
+| POST | `/api/run-scan?profile=` | Trigger a scan (fire-and-forget) |
+| GET | `/api/run-scan-stream?profile=` | SSE scan stream — emits `pin-drop` events as listings are found; client closes when `scan-complete` arrives. |
 
 ## Frontend Routes
 
 | Route | Page |
 |-------|------|
-| `/` | Home — profile management (create, edit, delete) |
-| `/{slug}/dashboard` | Per-profile dashboard (table + kanban views) |
+| `/` | Map-centric shell — the entire app. All profiles shown simultaneously; per-profile visibility toggled via the sidebar. |
+| `/{slug}/dashboard` | Redirects 302 to `/?profiles={slug}` (legacy URL support). |
 
 ## Common Pitfalls
 
@@ -128,7 +143,8 @@ All data routes take `?profile={slug}`.
 - **No npm deps** — everything uses native Node.js modules. Don't add dependencies without a good reason.
 - **`data/` is gitignored** — all profile data is local-only. Only code is versioned.
 - **The scraper is large** (~2500 lines). It handles 4 sources, each with its own parsing quirks. Modify with care.
-- **`ensureProfileStorage()`** auto-creates the profile directory when accessing a dashboard. For API-created profiles, `buildConfigFromPayload()` generates the config.
+- **`ensureProfileStorage()`** auto-creates the profile directory when accessing a dashboard. It also runs the tracker migration lazily (v1 → v2 schema). For API-created profiles, `buildConfigFromPayload()` generates the config. The scraper also runs migration on tracker read (cron path). `tracker.json` carries `schemaVersion: 2` after migration.
+- **`isValidStatus()`** enforces the 3-key allowlist (`sorting`, `pursuing`, `archived`). `POST /api/update-status` rejects any other value with 400.
 - **geo.admin.ch** is used for both zone selection (municipalities, `origins=gg25`) and workplace address autocomplete (all location types). No API key needed.
 - **Flatfox area tokens** — use the original city name (with accents/spaces), not the slug. The slug often doesn't work with Flatfox's API.
 - **Canton field** — must be present on each zone for immobilier.ch URLs. The autocomplete fills it automatically from geo.admin.ch data.
