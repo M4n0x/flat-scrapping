@@ -187,6 +187,7 @@ function compactListing(item, profile, coords) {
     priority: typeof item.priority === 'string' ? item.priority : '',
     score: toNumberOrNull(item.score),
     firstSeenAt: item.firstSeenAt || null,
+    lastSeenAt: item.lastSeenAt || null,
     publishedAt: item.publishedAt || null,
     viewedAt: item.viewedAt || null
   };

@@ -391,7 +391,7 @@ test('buildMapListingsPayload assigns distinct colors when profile hash colors c
   }
 });
 
-test('buildMapListingsPayload exposes status, priority, score, firstSeenAt, viewedAt', async () => {
+test('buildMapListingsPayload exposes status, priority, score, seen timestamps, viewedAt', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'apartment-map-fields-'));
   const profilesDir = path.join(root, 'profiles');
   try {
@@ -412,6 +412,7 @@ test('buildMapListingsPayload exposes status, priority, score, firstSeenAt, view
           priority: 'A',
           score: 87,
           firstSeenAt: '2026-04-15T10:00:00.000Z',
+          lastSeenAt: '2026-05-09T20:03:04.931Z',
           viewedAt: '2026-04-20T08:00:00.000Z'
         }
       ]
@@ -424,6 +425,7 @@ test('buildMapListingsPayload exposes status, priority, score, firstSeenAt, view
     assert.equal(listing.priority, 'A');
     assert.equal(listing.score, 87);
     assert.equal(listing.firstSeenAt, '2026-04-15T10:00:00.000Z');
+    assert.equal(listing.lastSeenAt, '2026-05-09T20:03:04.931Z');
     assert.equal(listing.viewedAt, '2026-04-20T08:00:00.000Z');
   } finally {
     await rm(root, { recursive: true, force: true });
